@@ -19,7 +19,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <Ticker.h>
-#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\Sourcen\3D Taster\Header\CncSensor.h"
+#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\Sourcen\3D Taster\Header\CncSensor.h" // Arduino IDE does not support relative paths to include files :-(
 
 using namespace CncSensor;
 

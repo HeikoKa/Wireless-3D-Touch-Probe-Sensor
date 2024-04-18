@@ -15,7 +15,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <Ticker.h>
-#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\Sourcen\3D Taster\Header\CncSensor.h"
+#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\Sourcen\3D Taster\Header\CncSensor.h" // Arduino IDE does not support relative paths to include files :-(
 
 #ifdef WEBSERVER
     #include <ESP8266WebServer.h>
@@ -95,7 +95,8 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
         String message = getAllTicks();
         message += "Ein neuer Taxt";
         message += "noch ein neuer Text";
-/*
+
+/*
 
           message += "DEBUG: not defined";                    #else        #ifdef DEBUG
         #endif
