@@ -15,7 +15,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <Ticker.h>
-#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\Sourcen\3D Taster\Header\CncSensor.h" // Arduino IDE does not support relative paths to include files :-(
+#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
 
 #ifdef WEBSERVER
     #include <ESP8266WebServer.h>
@@ -470,8 +470,10 @@ void loop(){
                                         //received client measures loop cycle message
                                         if (!strncmp (packetBuffer, CLIENT_CYCLE_MSG, strlen(CLIENT_CYCLE_MSG))){    // trying to decod the CLIENT_CYCLE_MSG prefix from the msg
                                             char *temp = packetBuffer + strlen(CLIENT_CYCLE_MSG);                    // cut/decode the raw number of ticks out of the client message
-                                            ticks = atoi(temp);                                                      // convert string of ticks to integer of ticks
-                                            setNewTicks(ticks);                                                      // safe the current ticks value in an array
+                                            #ifdef CYCLETIME
+                                              ticks = atoi(temp);                                                      // convert string of ticks to integer of ticks
+                                              setNewTicks(ticks);                                                      // safe the current ticks value in an array
+                                            #endif
                                             #ifdef DEBUG
                                                 Serial.printf("loop(): Received Cycle measurement message from client: %d ticks\n", ticks);
                                             #endif

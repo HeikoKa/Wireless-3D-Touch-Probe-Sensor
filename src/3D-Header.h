@@ -13,9 +13,9 @@
 #ifndef CNCSENSOR_H_
 #define CNCSENSOR_H_
 
-#define DEBUG       // enable debug output via serial interface on client and server
-#define CYCLETIME   // enable measuring the round trip delay from client to server back to client
-#define WEBSERVER   // enable webserver
+//#define DEBUG       // enable debug output via serial interface on client and server
+//#define CYCLETIME   // enable measuring the round trip delay from client to server back to client
+//#define WEBSERVER   // enable webserver
 
 // Pinbelegung: https://fearby.com/wp-content/uploads/2022/03/WeMosMiniD1ProGuide.png
 
@@ -41,8 +41,8 @@ namespace CncSensor{
   const char*        CLIENT_CYCLE_MSG       = "CYC:";                   // UDP message from client to server to transmit the last measured cycle time ticks
   const int          SERVER_ALIVE_CNT_MAX   = 1;                        // [24.03.24] reduced von 5 to 1, maximum server alive counter value, try to reconnect
   const int          SERVER_ALIVE_CNT_DEAD  = 2;                        // [24.03.24] reduced von 5 to 2, maximum server alive counter value, server seems to be dead
-  const int          SERVER_AQUN_CNT_MAX    = 200;                      // number of loop cycles before the server must acknowledge the high/low messages
-  const int          TOUCH_PIN_DEBOUNCE     = 3000;                      // debounce time in µs for touch input pin
+  const int          SERVER_AQUN_CNT_MAX    = 2000;                     // number of loop cycles before the server must acknowledge the high/low messages
+  const int          TOUCH_PIN_DEBOUNCE     = 700;                      // debounce time in µs for touch input pin
 
 
   //client and server consts
