@@ -15,7 +15,7 @@
   // Versuch starten auf tcp umstellen, obwohl der Overhead vermutlich zu groß ist
   // transfer battery voltage and RSSI to server for displaying in webserver
   // touchStateError wird niemals zurückgesetzt
-  // send signal strength to server?
+  // send signal strength to server
   
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
@@ -29,6 +29,7 @@ ADC_MODE(ADC_VCC);                                        //measure supply Volta
 bool    wlan_complete            = false;                 // global variable to indicate if wlan connection is established completely 
 int     server_alive_cnt         = 0;                     // current alive counter value
 bool    touch_state              = LOW;                   // last state that has been send to the server
+
 bool    high_command_acknowledge = true;                  // indicates if the sended HIGH/LOW command was acknowledge by the server, sometimes UDP packages seem to get lost
 bool    low_command_acknowledge  = true;                  // indicates if the sended HIGH/LOW command was acknowledge by the server, sometimes UDP packages seem to get lost
 int     acknowledge_counter      = 0;                     // counter for timeout waiting for the server to replay to the high/low UDP command
@@ -226,6 +227,7 @@ static inline void doService() {
 }
 
 /*
+
 void ICACHE_RAM_ATTR touchIsr(){                          // interrupt service routine that is called when the touch input changes state
   noInterrupts();                                         // disable interrupts to avoid debouncing effects on the touch input pin
   
@@ -521,3 +523,4 @@ void loop() {
     }
   }//if (packetSize)
 } //end loop()
+
