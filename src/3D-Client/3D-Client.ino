@@ -27,7 +27,7 @@ ADC_MODE(ADC_VCC);                                        //measure supply Volta
 
 bool    wlan_complete            = false;                 // global variable to indicate if wlan connection is established completely 
 int     server_alive_cnt         = 0;                     // current alive counter value
-//bool    touch_state         = HIGH;                     // last state that has been send to the server
+bool    touch_state              = LOW;                   // last state that has been send to the server
 bool    high_command_acknowledge = true;                  // indicates if the sended HIGH/LOW command was acknowledge by the server, sometimes UDP packages seem to get lost
 bool    low_command_acknowledge  = true;                  // indicates if the sended HIGH/LOW command was acknowledge by the server, sometimes UDP packages seem to get lost
 int     acknowledge_counter      = 0;                     // counter for timeout waiting for the server to replay to the high/low UDP command
@@ -41,7 +41,8 @@ long    rssi;
 
 
 #ifdef CYCLETIME
-    int32_t btime, etime;
+    int32_t bTimeLow, eTimeLow;
+    int32_t bTimeHigh, eTimeHigh;
 
     static inline int32_t asm_ccount(void) {              // asm-helpers taken from https://sub.nanona.fi/esp8266/timing-and-ticks.html, reading the CCOUT register with clock ticks
         int32_t r;
@@ -62,7 +63,10 @@ long    rssi;
       Udp.write(CLIENT_TOUCH_HIGH_MSG);
       Udp.endPacket();
       high_command_acknowledge = false;                   // set acknowledge to false until the server responses with the same command
-      //touch_state = HIGH;                               // remember the last state that was send to the server
+      touch_state = HIGH;                                 // remember the last state that was send to the server
+      #ifdef CYCLETIME
+        bTimeHigh = asm_ccount();                             // take begin time for client to server to client cycle time measurement
+      #endif
   }
 }
 
@@ -78,9 +82,9 @@ static inline void doSensorLow(){
       Udp.write(CLIENT_TOUCH_LOW_MSG);
       Udp.endPacket();
       low_command_acknowledge = false;                    // set acknowledge to false until the server responses with the same command
-      //touch_state = LOW;                                // remember the last state that was send to the server
+      touch_state = LOW;                                // remember the last state that was send to the server
       #ifdef CYCLETIME
-        btime = asm_ccount();                             // take begin time for client to server to client cycle time measurement
+        bTimeLow = asm_ccount();                             // take begin time for client to server to client cycle time measurement
       #endif
   }
 }
@@ -333,7 +337,7 @@ void setup() {
   
   //initialize digital input pins and isr
   pinMode(TOUCH_IN, INPUT_PULLUP);                        // set DIO to input with pullup
-  attachInterrupt(TOUCH_IN, touchIsr, CHANGE);            // attach interrup service rountine for 3D touch pin
+  //attachInterrupt(TOUCH_IN, touchIsr, CHANGE);            // attach interrup service rountine for 3D touch pin
   
   //Setup timer interrup for service routines
   timer1_attachInterrupt(serviceIsr);
@@ -362,7 +366,21 @@ void loop() {
     #endif
     wlanInit();
    }
+  
+  // do pin polling instead of interrupt, check for state changes high->low or low->high
+  if ((digitalRead(TOUCH_IN) == HIGH) && (touch_state == LOW)){
+    doSensorHigh();
+    //delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
+    delay(20);
+  }
+  
 
+  if ((digitalRead(TOUCH_IN) == LOW) && (touch_state == HIGH)){
+    doSensorLow();
+    //delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
+    delay(20);
+  }
+   
   //increase the counter, if an LOW/HIGH acknowledge from the server is pending
    if ((low_command_acknowledge == false)||(high_command_acknowledge == false)){
       acknowledge_counter++;                              // increase server acknowledge counter if client waits for a LOW/HIGH reply from the server
@@ -459,17 +477,17 @@ void loop() {
                 #endif
                 high_command_acknowledge = true;
                 acknowledge_counter = 0;
-                /*#ifdef CYCLETIME
-                        etime = asm_ccount();             //take end time for client to server to client cycle time measurement
+                #ifdef CYCLETIME
+                        eTimeHigh = asm_ccount();             //take end time for client to server to client cycle time measurement
                         #ifdef DEBUG
-                          Serial.printf("loop(): Measured UDP cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(etime - btime)));
+                          Serial.printf("loop(): Measured UDP cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(eTimeHigh - bTimeHigh)));
                         #endif
                         //send cycles to server e.g. to be displayed by the webserver
                         Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-                        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(etime - btime)); // pack end-time minus begin-time into a message
+                        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeHigh - bTimeHigh)); // pack end-time minus begin-time into a message
                         Udp.write(cycle_msg.c_str());
                         Udp.endPacket();
-                #endif*/
+                #endif
             }else{
 
                 //receiving LOW acknowledge message from server
@@ -480,13 +498,13 @@ void loop() {
                     low_command_acknowledge = true;
                     acknowledge_counter = 0;
                     #ifdef CYCLETIME
-                        etime = asm_ccount();             //take end time for client to server to client cycle time measurement
+                        eTimeLow = asm_ccount();             //take end time for client to server to client cycle time measurement
                         #ifdef DEBUG
-                          Serial.printf("loop(): Measured UDP cycle time for sensor LOW activation: %u ticks\n", ((uint32_t)(etime - btime)));
+                          Serial.printf("loop(): Measured UDP cycle time for sensor LOW activation: %u ticks\n", ((uint32_t)(eTimeLow - bTimeLow)));
                         #endif
                         //send cycles to server e.g. to be displayed by the webserver
                         Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-                        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(etime - btime)); // pack end-time minus begin-time into a message
+                        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeLow - bTimeLow)); // pack end-time minus begin-time into a message
                         Udp.write(cycle_msg.c_str());
                         Udp.endPacket();
                     #endif
