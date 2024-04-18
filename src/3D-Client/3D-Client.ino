@@ -15,6 +15,7 @@
   // Versuch starten auf tcp umstellen, obwohl der Overhead vermutlich zu groß ist
   // transfer battery voltage and RSSI to server for displaying in webserver
   // touchStateError wird niemals zurückgesetzt
+  // send signal strength to server?
   
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
@@ -58,14 +59,13 @@ long    rssi;
     Serial.println(CLIENT_TOUCH_HIGH_MSG);
   #endif
   if (wlan_complete){
-      //send UDP packet to server to indicate the 3D touch change 
-      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());  // send UDP packet to server to indicate the 3D touch change 
       Udp.write(CLIENT_TOUCH_HIGH_MSG);
       Udp.endPacket();
       high_command_acknowledge = false;                   // set acknowledge to false until the server responses with the same command
       touch_state = HIGH;                                 // remember the last state that was send to the server
       #ifdef CYCLETIME
-        bTimeHigh = asm_ccount();                             // take begin time for client to server to client cycle time measurement
+        bTimeHigh = asm_ccount();                         // take begin time for client to server to client cycle time measurement
       #endif
   }
 }
@@ -77,14 +77,13 @@ static inline void doSensorLow(){
     Serial.println(CLIENT_TOUCH_LOW_MSG);
   #endif
   if (wlan_complete){
-      //send UDP packet to server to indicate the 3D touch change
-      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());  //send UDP packet to server to indicate the 3D touch change
       Udp.write(CLIENT_TOUCH_LOW_MSG);
       Udp.endPacket();
       low_command_acknowledge = false;                    // set acknowledge to false until the server responses with the same command
-      touch_state = LOW;                                // remember the last state that was send to the server
+      touch_state = LOW;                                  // remember the last state that was send to the server
       #ifdef CYCLETIME
-        bTimeLow = asm_ccount();                             // take begin time for client to server to client cycle time measurement
+        bTimeLow = asm_ccount();                          // take begin time for client to server to client cycle time measurement
       #endif
   }
 }
@@ -110,7 +109,7 @@ static inline void checkAliveCounter(){
     }else{
       // server seems to be dead, client goes to sleep
       #ifdef DEBUG
-      Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals. Going to sleep\n", server_alive_cnt);
+        Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals. Going to sleep\n", server_alive_cnt);
       #endif
       wlan_complete = false;
       server_alive_cnt = 0;
@@ -176,7 +175,6 @@ static inline void checkWlanStatus() {
     }
 
     rssi = WiFi.RSSI();
-    // ########## send signal strength to server?
     if (rssi < WIFI_RSSI_REPORT_LEVEL){
       #ifdef DEBUG
         Serial.print("checkWlanStatus(): ERROR: WLAN signal strength is critical, RSSI:");
@@ -227,7 +225,7 @@ static inline void doService() {
   #endif
 }
 
-
+/*
 void ICACHE_RAM_ATTR touchIsr(){                          // interrupt service routine that is called when the touch input changes state
   noInterrupts();                                         // disable interrupts to avoid debouncing effects on the touch input pin
   
@@ -239,6 +237,7 @@ void ICACHE_RAM_ATTR touchIsr(){                          // interrupt service r
   delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   interrupts();                                           // enable interrupts again
 }
+*/
 
 
 void ICACHE_RAM_ATTR serviceIsr(){                        // timer interrupt service routine
@@ -370,15 +369,15 @@ void loop() {
   // do pin polling instead of interrupt, check for state changes high->low or low->high
   if ((digitalRead(TOUCH_IN) == HIGH) && (touch_state == LOW)){
     doSensorHigh();
-    //delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
-    delay(20);
+    delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
+    //delay(20);
   }
   
 
   if ((digitalRead(TOUCH_IN) == LOW) && (touch_state == HIGH)){
     doSensorLow();
-    //delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
-    delay(20);
+    delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
+    //delay(20);
   }
    
   //increase the counter, if an LOW/HIGH acknowledge from the server is pending
