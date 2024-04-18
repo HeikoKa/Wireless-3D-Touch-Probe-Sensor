@@ -19,7 +19,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <Ticker.h>
-#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\Sourcen\3D Taster\Header\CncSensor.h" // Arduino IDE does not support relative paths to include files :-(
+#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
 
 using namespace CncSensor;
 
@@ -225,10 +225,15 @@ static inline void doService() {
 
 
 void ICACHE_RAM_ATTR touchIsr(){                          // interrupt service routine that is called when the touch input changes state
+  noInterrupts();                                         // disable interrupts to avoid debouncing effects on the touch input pin
+  
   if (digitalRead(TOUCH_IN) == HIGH)
     doSensorHigh(); 
   else
     doSensorLow();
+
+  delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
+  interrupts();                                           // enable interrupts again
 }
 
 
