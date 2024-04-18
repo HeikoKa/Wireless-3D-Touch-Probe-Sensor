@@ -21,7 +21,7 @@
 
 namespace CncSensor{
  
-  const char*        ssid                   = "3D-Touch-WIFI";         // WLAN network name
+  const char*        ssid                   = "3D-Touch-WIFI";          // WLAN network name
   const char*        password               = "123456789";              // WLAN password
 
   //server consts 
@@ -42,6 +42,8 @@ namespace CncSensor{
   const int          SERVER_ALIVE_CNT_MAX   = 1;                        // [24.03.24] reduced von 5 to 1, maximum server alive counter value, try to reconnect
   const int          SERVER_ALIVE_CNT_DEAD  = 2;                        // [24.03.24] reduced von 5 to 2, maximum server alive counter value, server seems to be dead
   const int          SERVER_AQUN_CNT_MAX    = 200;                      // number of loop cycles before the server must acknowledge the high/low messages
+  const int          TOUCH_PIN_DEBOUNCE     = 3000;                      // debounce time in µs for touch input pin
+
 
   //client and server consts
   const uint32_t     SERVICE_INTERVALL      = 4000000;                  // [24.03.24]changed 8388607 to 4000000 from timer ticks for service interrupt (max 8388607)
