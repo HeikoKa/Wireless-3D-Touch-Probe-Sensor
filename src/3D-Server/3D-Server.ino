@@ -376,20 +376,18 @@ void loop(){
   }
 
   // send sleep message to client if the server input pin is low (CNC does not need the sensor in the next minutes)
-    if (digitalRead(SLEEP_IN) == LOW){
-      #ifdef DEBUG
-        Serial.printf("loop(): CNC controller wants to send the client asleep\n");
-      #endif
-      //wlan_complete = false;                            //client will disconnect
-      Udp.beginPacket(clientIpAddr, clientUdpPort);
-      Udp.write(SERVER_SLEEP_MSG);
-      Udp.endPacket();
-    }
+  if (digitalRead(SLEEP_IN) == LOW){
+    #ifdef DEBUG
+      Serial.printf("loop(): CNC controller wants to send the client asleep\n");
+    #endif
+    Udp.beginPacket(clientIpAddr, clientUdpPort);
+    Udp.write(SERVER_SLEEP_MSG);
+    Udp.endPacket();
+  }
 
     // receive incoming UDP packets
     int  packetSize = Udp.parsePacket();
-    //if (wlan_complete){ // skip everything except for the interrupts (timer and digital in) if wlan connection is not established
-      if (packetSize){
+    if (packetSize){
         int len = Udp.read(packetBuffer, UDP_PACKET_MAX_SIZE);
         if (len > 0)
           packetBuffer[len] = '\0';
@@ -403,96 +401,86 @@ void loop(){
             Udp.beginPacket(clientIpAddr, clientUdpPort);
             Udp.write(CLIENT_TOUCH_HIGH_MSG);             // send back client high messages to client for response/feedback
             Udp.endPacket();
-          break;
         }
 
-            //received client sensor low command
-            if (!strcmp (packetBuffer, CLIENT_TOUCH_LOW_MSG)){
-                digitalWrite(TOUCH_OUT, HIGH);
-                #ifdef DEBUG
-                    Serial.printf("loop(): Client touch is low.  Sending back the status\n");
-                #endif
-                Udp.beginPacket(clientIpAddr, clientUdpPort);
-                Udp.write(CLIENT_TOUCH_LOW_MSG);          // send back client low messages to client for response/feedback
-                Udp.endPacket();
-             break;
-            }
+        //received client sensor low command
+        if (!strcmp (packetBuffer, CLIENT_TOUCH_LOW_MSG)){
+            digitalWrite(TOUCH_OUT, HIGH);
+            #ifdef DEBUG
+                Serial.printf("loop(): Client touch is low.  Sending back the status\n");
+            #endif
+            Udp.beginPacket(clientIpAddr, clientUdpPort);
+            Udp.write(CLIENT_TOUCH_LOW_MSG);          // send back client low messages to client for response/feedback
+            Udp.endPacket();
+        }
 
-                //received client battery low
-                if (!strncmp (packetBuffer, CLIENT_BAT_LOW_MSG, strlen(CLIENT_BAT_LOW_MSG))){
-                    clientBatteryStatus= CLIENT_BAT_LOW;
-                    #ifdef DEBUG
-                        Serial.printf("loop(): Client battery is low\n\n");
-                    #endif
-                 break;
-                }
+        //received client battery low
+        if (!strncmp (packetBuffer, CLIENT_BAT_LOW_MSG, strlen(CLIENT_BAT_LOW_MSG))){
+            clientBatteryStatus= CLIENT_BAT_LOW;
+            #ifdef DEBUG
+                Serial.printf("loop(): Client battery is low\n\n");
+            #endif
+        }
 
-                  //received client battery critical
-                  if (!strncmp (packetBuffer, CLIENT_BAT_CRITICAL_MSG, strlen(CLIENT_BAT_CRITICAL_MSG))){
-                    clientBatteryStatus = CLIENT_BAT_CRITICAL;
-                    #ifdef DEBUG
-                        Serial.printf("loop(): Client battery is critical\n\n");
-                    #endif
-                   break;
-                  }
+        //received client battery critical
+        if (!strncmp (packetBuffer, CLIENT_BAT_CRITICAL_MSG, strlen(CLIENT_BAT_CRITICAL_MSG))){
+          clientBatteryStatus = CLIENT_BAT_CRITICAL;
+          #ifdef DEBUG
+              Serial.printf("loop(): Client battery is critical\n\n");
+          #endif
+        }
 
-                        //received client battery is ok
-                        if (!strncmp (packetBuffer, CLIENT_BAT_OK_MSG, strlen(CLIENT_BAT_OK_MSG))){
-                            clientBatteryStatus= CLIENT_BAT_OK;
-                            char *temp = packetBuffer + strlen(CLIENT_BAT_OK_MSG);        // cut/decode the raw voltage number out of the client message
-                            clientBateryVoltage = strtof(temp, &errCheck);                // convert string to float
-                            #ifdef DEBUG
-                                Serial.printf("loop(): Received Client battery is ok message, current bat voltage is %.2fV\n", clientBateryVoltage);
-                            #endif
-                         break;
-                        }
+        //received client battery is ok
+        if (!strncmp (packetBuffer, CLIENT_BAT_OK_MSG, strlen(CLIENT_BAT_OK_MSG))){
+            clientBatteryStatus= CLIENT_BAT_OK;
+            char *temp = packetBuffer + strlen(CLIENT_BAT_OK_MSG);        // cut/decode the raw voltage number out of the client message
+            clientBateryVoltage = strtof(temp, &errCheck);                // convert string to float
+            #ifdef DEBUG
+                Serial.printf("loop(): Received Client battery is ok message, current bat voltage is %.2fV\n", clientBateryVoltage);
+            #endif
+        }
 
-                            //received client is alive
-                            if (!strncmp (packetBuffer, CLIENT_ALIVE_MSG, strlen(CLIENT_ALIVE_MSG))){
-                                client_alive_counter = 0;    //reset client alive counter when receiving alive message
-                                #ifdef DEBUG
-                                    Serial.printf("loop(): Received -Client is alive- message\n");
-                                #endif
-                             break;
-                            }
+        //received client is alive
+        if (!strncmp (packetBuffer, CLIENT_ALIVE_MSG, strlen(CLIENT_ALIVE_MSG))){
+            client_alive_counter = 0;    //reset client alive counter when receiving alive message
+            #ifdef DEBUG
+                Serial.printf("loop(): Received -Client is alive- message\n");
+            #endif
+        }
 
-                                //received client hello message
-                                if (!strncmp (packetBuffer, CLIENT_HELLO_MSG, strlen(CLIENT_HELLO_MSG))){
-                                    #ifdef DEBUG
-                                        Serial.printf("loop(): Detected client hello command, send a hello reply\n\n");
-                                    #endif
-                                    Udp.beginPacket(clientIpAddr, clientUdpPort);
-                                    Udp.write(SERVER_REPLY_MSG);
-                                    Udp.endPacket();
-                                 break;
-                                }
+        //received client hello message
+        if (!strncmp (packetBuffer, CLIENT_HELLO_MSG, strlen(CLIENT_HELLO_MSG))){
+            #ifdef DEBUG
+                Serial.printf("loop(): Detected client hello command, send a hello reply\n\n");
+            #endif
+            Udp.beginPacket(clientIpAddr, clientUdpPort);
+            Udp.write(SERVER_REPLY_MSG);
+            Udp.endPacket();
+        }
 
-                                    //received client reply message
-                                    if (!strncmp (packetBuffer, CLIENT_REPLY_MSG, strlen(CLIENT_REPLY_MSG))){
-                                        #ifdef DEBUG
-                                          Serial.printf("loop(): Detected client reply message\n");
-                                        #endif
-                                     break;
-                                     }
-                                         
-                                        //received client measures loop cycle message
-                                        if (!strncmp (packetBuffer, CLIENT_CYCLE_MSG, strlen(CLIENT_CYCLE_MSG))){    // trying to decod the CLIENT_CYCLE_MSG prefix from the msg
-                                            char *temp = packetBuffer + strlen(CLIENT_CYCLE_MSG);                    // cut/decode the raw number of ticks out of the client message
-                                            #ifdef CYCLETIME
-                                              ticks = atoi(temp);                                                      // convert string of ticks to integer of ticks
-                                              setNewTicks(ticks);                                                      // safe the current ticks value in an array
-                                            #endif
-                                            #ifdef DEBUG
-                                                Serial.printf("loop(): Received Cycle measurement message from client: %d ticks\n", ticks);
-                                            #endif
-                                         break;
-                                        }
-
-                                            // unknown command
-                                            #ifdef DEBUG
-                                              Serial.printf("loop(): UDP content is unknown. Content is %s\n\n", packetBuffer);
-                                            #endif
-
-      }
-  //}
+        //received client reply message
+        if (!strncmp (packetBuffer, CLIENT_REPLY_MSG, strlen(CLIENT_REPLY_MSG))){
+            #ifdef DEBUG
+              Serial.printf("loop(): Detected client reply message\n");
+            #endif
+         }
+             
+        //received client measures loop cycle message
+        if (!strncmp (packetBuffer, CLIENT_CYCLE_MSG, strlen(CLIENT_CYCLE_MSG))){    // trying to decod the CLIENT_CYCLE_MSG prefix from the msg
+            char *temp = packetBuffer + strlen(CLIENT_CYCLE_MSG);                    // cut/decode the raw number of ticks out of the client message
+            #ifdef CYCLETIME
+              ticks = atoi(temp);                                                      // convert string of ticks to integer of ticks
+              setNewTicks(ticks);                                                      // safe the current ticks value in an array
+            #endif
+            #ifdef DEBUG
+                Serial.printf("loop(): Received Cycle measurement message from client: %d ticks\n", ticks);
+            #endif
+        }
+        /*
+        // unknown command
+        #ifdef DEBUG
+          Serial.printf("loop(): UDP content is unknown. Content is %s\n\n", packetBuffer);
+        #endif
+        */
+    }
 }//end loop()
