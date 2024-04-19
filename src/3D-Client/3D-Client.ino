@@ -397,83 +397,84 @@ void loop(void){
         Serial.println("loop(): Detected sleep command\nGoing to deep sleep...");
       #endif
       ESP.deepSleep(0); // goto deep sleep, awake by external reset pin
-    }else{
-        
-      //receiving alive message from server and resetting the alive counter
-      if(!strcmp(packetBuffer, SERVER_ALIVE_MSG)){
-        #ifdef DEBUG
-          Serial.println("loop(): Detected server alive command\n");
-        #endif
-        server_alive_cnt = 0; //reset alive counter for server 
-      }else{
-          
-        //receiving hello message from server
-        if(!strcmp(packetBuffer, SERVER_HELLO_MSG)){
-          #ifdef DEBUG
-            Serial.println("loop(): Detected server hello command, send a reply");
-          #endif
-          Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-          Udp.write(CLIENT_REPLY_MSG);
-          Udp.endPacket();
-        }else{
-            
-          //receiving reply message from server
-          if(!strcmp(packetBuffer, SERVER_REPLY_MSG)){
-            #ifdef DEBUG
-              Serial.println("loop(): Detected server reply message.");
-            #endif
-          }else{
-              
-            //receiving HIGH acknowledge message from server
-            if(!strcmp(packetBuffer, CLIENT_TOUCH_HIGH_MSG)){
-                #ifdef DEBUG
-                  Serial.println("loop(): Detected HIGH acknowledge message from server.");
-                #endif
-                high_command_acknowledge = true;
-                acknowledge_counter = 0;
-                #ifdef CYCLETIME
-                        eTimeHigh = asm_ccount();             //take end time for client to server to client cycle time measurement
-                        #ifdef DEBUG
-                          Serial.printf("loop(): Measured UDP cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(eTimeHigh - bTimeHigh)));
-                        #endif
-                        //send cycles to server e.g. to be displayed by the webserver
-                        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-                        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeHigh - bTimeHigh)); // pack end-time minus begin-time into a message
-                        Udp.write(cycle_msg.c_str());
-                        Udp.endPacket();
-                #endif
-            }else{
-
-                //receiving LOW acknowledge message from server
-                if(!strcmp(packetBuffer, CLIENT_TOUCH_LOW_MSG)){
-                    #ifdef DEBUG
-                      Serial.println("loop(): Detected LOW acknowledge message from server.");
-                    #endif
-                    low_command_acknowledge = true;
-                    acknowledge_counter = 0;
-                    #ifdef CYCLETIME
-                        eTimeLow = asm_ccount();             //take end time for client to server to client cycle time measurement
-                        #ifdef DEBUG
-                          Serial.printf("loop(): Measured UDP cycle time for sensor LOW activation: %u ticks\n", ((uint32_t)(eTimeLow - bTimeLow)));
-                        #endif
-                        //send cycles to server e.g. to be displayed by the webserver
-                        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-                        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeLow - bTimeLow)); // pack end-time minus begin-time into a message
-                        Udp.write(cycle_msg.c_str());
-                        Udp.endPacket();
-                    #endif
-                }else{
-
-                    //receiving unknown message from server
-                    #ifdef DEBUG
-                      Serial.println("loop(): Detected unknown command");
-                    #endif
-                } // end CLIENT_TOUCH_LOW_MSG
-            } // end CLIENT_TOUCH_HIGH_MSG
-          } // end SERVER_REPLY_MSG
-        } // end SERVER_HELLO_MSG
-      }
+      break;
     }
+        
+    //receiving alive message from server and resetting the alive counter
+    if(!strcmp(packetBuffer, SERVER_ALIVE_MSG)){
+      #ifdef DEBUG
+        Serial.println("loop(): Detected server alive command\n");
+      #endif
+      server_alive_cnt = 0; //reset alive counter for server
+      break;
+    }
+          
+    //receiving hello message from server
+    if(!strcmp(packetBuffer, SERVER_HELLO_MSG)){
+      #ifdef DEBUG
+        Serial.println("loop(): Detected server hello command, send a reply");
+      #endif
+      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+      Udp.write(CLIENT_REPLY_MSG);
+      Udp.endPacket();
+      break;
+    }
+            
+    //receiving reply message from server
+    if(!strcmp(packetBuffer, SERVER_REPLY_MSG)){
+      #ifdef DEBUG
+        Serial.println("loop(): Detected server reply message.");
+      #endif
+      break;
+    }
+              
+    //receiving HIGH acknowledge message from server
+    if(!strcmp(packetBuffer, CLIENT_TOUCH_HIGH_MSG)){
+      #ifdef DEBUG
+        Serial.println("loop(): Detected HIGH acknowledge message from server.");
+      #endif
+      high_command_acknowledge = true;
+      acknowledge_counter = 0;
+      #ifdef CYCLETIME
+        eTimeHigh = asm_ccount();             //take end time for client to server to client cycle time measurement
+        #ifdef DEBUG
+          Serial.printf("loop(): Measured UDP cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(eTimeHigh - bTimeHigh)));
+        #endif
+        //send cycles to server e.g. to be displayed by the webserver
+        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeHigh - bTimeHigh)); // pack end-time minus begin-time into a message
+        Udp.write(cycle_msg.c_str());
+        Udp.endPacket();
+      #endif
+      break;
+    }
+
+       //receiving LOW acknowledge message from server
+       if(!strcmp(packetBuffer, CLIENT_TOUCH_LOW_MSG)){
+       #ifdef DEBUG
+         Serial.println("loop(): Detected LOW acknowledge message from server.");
+       #endif
+       low_command_acknowledge = true;
+       acknowledge_counter = 0;
+       #ifdef CYCLETIME
+          eTimeLow = asm_ccount();             //take end time for client to server to client cycle time measurement
+        #ifdef DEBUG
+          Serial.printf("loop(): Measured UDP cycle time for sensor LOW activation: %u ticks\n", ((uint32_t)(eTimeLow - bTimeLow)));
+        #endif
+        //send cycles to server e.g. to be displayed by the webserver
+        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeLow - bTimeLow)); // pack end-time minus begin-time into a message
+        Udp.write(cycle_msg.c_str());
+        Udp.endPacket();
+      #endif
+      break;
+    }
+
+    //receiving unknown message from server
+    #ifdef DEBUG
+      Serial.println("loop(): Detected unknown command");
+    #endif
+   
   }//if (packetSize)
 } //end loop()
 
