@@ -20,26 +20,26 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <Ticker.h>
-#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
+#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
 
 using namespace CncSensor;
 
-ADC_MODE(ADC_VCC);                                        //measure supply Voltage of the board with analog in 
+ADC_MODE(ADC_VCC);                                        // measure supply Voltage of the board with analog in 
 
 bool    wlan_complete            = false;                 // global variable to indicate if wlan connection is established completely 
-int     server_alive_cnt         = 0;                     // current alive counter value
-bool    touch_state              = LOW;                   // last state that has been send to the server
+int     server_alive_cnt         = 0;                     // current "server is alive counter" value
+bool    touch_state              = LOW;                   // current touch sensor state
 
-bool    high_command_acknowledge = true;                  // indicates if the sended HIGH/LOW command was acknowledge by the server, sometimes UDP packages seem to get lost
-bool    low_command_acknowledge  = true;                  // indicates if the sended HIGH/LOW command was acknowledge by the server, sometimes UDP packages seem to get lost
+bool    high_command_acknowledge = true;                  // indicates if the sended HIGH command was acknowledge by the server, sometimes UDP packages seem to get lost
+bool    low_command_acknowledge  = true;                  // indicates if the sended LOW command was acknowledge by the server, sometimes UDP packages seem to get lost
 int     acknowledge_counter      = 0;                     // counter for timeout waiting for the server to replay to the high/low UDP command
-char    packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer to hold UDP messages
+char    packetBuffer[UDP_PACKET_MAX_SIZE];                // general buffer to hold UDP messages
 bool    batteryError             = false;                 // error with the battery
 bool    rssiError                = false;                 // error with the WLAN rssi
 bool    touchStateError          = false;                 // error with the touch state
 bool    aliveCounterError        = false;                 // error with server alive counter
 WiFiUDP Udp;
-long    rssi;
+long    rssi;                                             // WLAN signal strength
 
 
 #ifdef CYCLETIME
@@ -54,7 +54,7 @@ long    rssi;
 #endif
 
 
- static inline void doSensorHigh(){
+ static inline void doSensorHigh(void){
   digitalWrite(TOUCH_LED, LOW);                           // indicate the current touch state by LED output
   #ifdef DEBUG
     Serial.println(CLIENT_TOUCH_HIGH_MSG);
@@ -64,7 +64,7 @@ long    rssi;
       Udp.write(CLIENT_TOUCH_HIGH_MSG);
       Udp.endPacket();
       high_command_acknowledge = false;                   // set acknowledge to false until the server responses with the same command
-      touch_state = HIGH;                                 // remember the last state that was send to the server
+      touch_state = HIGH;                                 // remember the current state
       #ifdef CYCLETIME
         bTimeHigh = asm_ccount();                         // take begin time for client to server to client cycle time measurement
       #endif
@@ -72,17 +72,17 @@ long    rssi;
 }
 
 
-static inline void doSensorLow(){
+static inline void doSensorLow(void){
   digitalWrite(TOUCH_LED, HIGH);                          // indicate the current touch state by LED output
   #ifdef DEBUG
     Serial.println(CLIENT_TOUCH_LOW_MSG);
   #endif
   if (wlan_complete){
-      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());  //send UDP packet to server to indicate the 3D touch change
+      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());  // send UDP packet to server to indicate the 3D touch change
       Udp.write(CLIENT_TOUCH_LOW_MSG);
       Udp.endPacket();
       low_command_acknowledge = false;                    // set acknowledge to false until the server responses with the same command
-      touch_state = LOW;                                  // remember the last state that was send to the server
+      touch_state = LOW;                                  // remember the current state
       #ifdef CYCLETIME
         bTimeLow = asm_ccount();                          // take begin time for client to server to client cycle time measurement
       #endif
@@ -90,10 +90,9 @@ static inline void doSensorLow(){
 }
 
 
-static inline void checkAliveCounter(){
+static inline void checkAliveCounter(void){
   if (server_alive_cnt < SERVER_ALIVE_CNT_MAX){
-    //increase "the server has not answered" alive counter
-    server_alive_cnt++;
+    server_alive_cnt++;                                   // increase "the server has not answered" alive counter
     #ifdef DEBUG
       Serial.printf("checkAliveCounter(): Server alive counter current: %d, max reconnect: %d, max server dead: %d\n", server_alive_cnt, SERVER_ALIVE_CNT_MAX, SERVER_ALIVE_CNT_DEAD);
     #endif
@@ -112,8 +111,8 @@ static inline void checkAliveCounter(){
       #ifdef DEBUG
         Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals. Going to sleep\n", server_alive_cnt);
       #endif
-      wlan_complete = false;
-      server_alive_cnt = 0;
+      wlan_complete     = false;
+      server_alive_cnt  = 0;
       aliveCounterError = true;                           // set red LED to indicate error
       ESP.deepSleep(0);                                   // go to deep sleep, reset pin to wake up
     } // end if SERVER_ALIVE_CNT_DEAD 
@@ -122,9 +121,8 @@ static inline void checkAliveCounter(){
 
 
 
-static inline void checkBatteryVoltage(){
-  //float batVoltage = ESP.getVcc() * (3.2 / 1023.0);       // recalculate the sensor value to the battery voltage 
-  float batVoltage = (ESP.getVcc() / 1000.0);       // recalculate the sensor value to the battery voltage
+static inline void checkBatteryVoltage(void){
+  float batVoltage = (ESP.getVcc() / 1000.0);            // recalculate the sensor value to the battery voltage
 
   // ##################hier ist eigentlich alles immer gleich nur die message ändert sich 
   if (batVoltage < BAT_LOW_VOLT){
@@ -132,7 +130,6 @@ static inline void checkBatteryVoltage(){
         
         Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
         String cycle_msg = CLIENT_BAT_CRITICAL_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
-        //Udp.write(CLIENT_BAT_CRITICAL_MSG);               // send UDP message with "battery critical" 
         Udp.write(cycle_msg.c_str());
         Udp.endPacket();
         #ifdef DEBUG
@@ -143,7 +140,6 @@ static inline void checkBatteryVoltage(){
       }else{                                              // battery is only low
         Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
         String cycle_msg = CLIENT_BAT_LOW_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
-        //Udp.write(CLIENT_BAT_LOW_MSG);
         Udp.write(cycle_msg.c_str());
         Udp.endPacket();
         #ifdef DEBUG
@@ -155,7 +151,6 @@ static inline void checkBatteryVoltage(){
   }else{                                                  // battery is ok
       Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
       String cycle_msg = CLIENT_BAT_OK_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
-      //Udp.write(CLIENT_BAT_OK_MSG);
       Udp.write(cycle_msg.c_str());
       Udp.endPacket();
     #ifdef DEBUG
@@ -166,7 +161,7 @@ static inline void checkBatteryVoltage(){
 }
 
 
-static inline void checkWlanStatus() {
+static inline void checkWlanStatus(void) {
   if (wlan_complete){
     if (WiFi.status() != WL_CONNECTED){
       #ifdef DEBUG
@@ -193,7 +188,7 @@ static inline void checkWlanStatus() {
 } //end void checkWlanStatus()
 
 
-static inline void sendAliveMsg() {
+static inline void sendAliveMsg(void) {
     // send alive message regardless of the WLAN state and if connection is established
     #ifdef DEBUG
       Serial.printf("sendAliveMsg(): Sending UDP alive message to server\n");
@@ -205,13 +200,13 @@ static inline void sendAliveMsg() {
 
 static inline void setErrorLED(bool batteryError, bool rssiError, bool touchStateError, bool aliveCounterError){
   if (batteryError || rssiError || touchStateError || aliveCounterError)
-    digitalWrite(CLIENT_ERROR_OUT, LOW);                // enlight red LED
+    digitalWrite(CLIENT_ERROR_OUT, LOW);                // enlight red LED if any error has occurred
   else
-    digitalWrite(CLIENT_ERROR_OUT, HIGH);               // switch off light
+    digitalWrite(CLIENT_ERROR_OUT, HIGH);               // switch off light if no error is reported
 }
 
 
-static inline void doService() {
+static inline void doService(void) {
   // Does all service activities that are called regularly by timer interrupt
   #ifdef DEBUG
     Serial.printf("\ndoService(): start service\n");
@@ -226,37 +221,19 @@ static inline void doService() {
   #endif
 }
 
-/*
-
-void ICACHE_RAM_ATTR touchIsr(){                          // interrupt service routine that is called when the touch input changes state
-  noInterrupts();                                         // disable interrupts to avoid debouncing effects on the touch input pin
-  
-  if (digitalRead(TOUCH_IN) == HIGH)
-    doSensorHigh(); 
-  else
-    doSensorLow();
-
-  delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
-  interrupts();                                           // enable interrupts again
-}
-*/
-
-
-void ICACHE_RAM_ATTR serviceIsr(){                        // timer interrupt service routine
+void ICACHE_RAM_ATTR serviceIsr(void){                    // timer interrupt service routine
   doService();
 }
 
 
-void wlanInit(){
+void wlanInit(void){
   WiFi.config(clientIpAddr, gateway, subnet);             // set manual IP address if in Soft Access Point (SAP) mode and no DHCP is available
-
   #ifdef DEBUG
     Serial.println("\n\n");
     Serial.printf("wlanInit(): Connecting to %s ", ssid);
   #endif
   
   WiFi.begin(ssid, password);                             // connect to WLAN 
-  
   while (WiFi.status() != WL_CONNECTED){                  // stay in this loop until a WLAN connection could be established
     digitalWrite(WLAN_LED, HIGH);                         // blink WLAN LED slowly to indicate connection try
     delay(SLOW_BLINK);
@@ -324,7 +301,7 @@ void wlanInit(){
 }//end void WlanInit()
 
 
-void setup() {
+void setup(void) {
   #ifdef DEBUG
     Serial.begin(115200);                                 // Setup Serial Interface with baud rate
   #endif
@@ -338,7 +315,6 @@ void setup() {
   
   //initialize digital input pins and isr
   pinMode(TOUCH_IN, INPUT_PULLUP);                        // set DIO to input with pullup
-  //attachInterrupt(TOUCH_IN, touchIsr, CHANGE);            // attach interrup service rountine for 3D touch pin
   
   //Setup timer interrup for service routines
   timer1_attachInterrupt(serviceIsr);
@@ -358,8 +334,7 @@ void setup() {
 
 
 
-void loop() {
-  
+void loop(void){
   //reconnect to server if connection got lost
    if (wlan_complete == false){
     #ifdef DEBUG
@@ -372,16 +347,15 @@ void loop() {
   if ((digitalRead(TOUCH_IN) == HIGH) && (touch_state == LOW)){
     doSensorHigh();
     delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
-    //delay(20);
   }
   
 
   if ((digitalRead(TOUCH_IN) == LOW) && (touch_state == HIGH)){
     doSensorLow();
     delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
-    //delay(20);
   }
-   
+
+ //##################################acknowledge_counter doppelt machen###########################
   //increase the counter, if an LOW/HIGH acknowledge from the server is pending
    if ((low_command_acknowledge == false)||(high_command_acknowledge == false)){
       acknowledge_counter++;                              // increase server acknowledge counter if client waits for a LOW/HIGH reply from the server
@@ -396,7 +370,7 @@ void loop() {
         #endif
         doSensorLow();                                    // server did not answer to low message from client, re-transmit
         acknowledge_counter = 0;                          // reset counter for re-transmitting low message
-        touchStateError = true;
+        touchStateError     = true;
      }
 
      if(high_command_acknowledge == false){
@@ -405,30 +379,9 @@ void loop() {
         #endif
         doSensorHigh();                                   // server did not answer to low message from client, re-transmit
         acknowledge_counter = 0;                          // reset counter for re-transmitting low message
-        touchStateError = true;
+        touchStateError     = true;
      }
    }
-
-  // for safty reasons double check the current touch-state and the last touch-UPD-send-state, in case an isr gets lost due to a glitch
-  // das folgende hat irgendwie auch nicht geholfen, ich denke das liegt an UDP, msg ist einfach durch glitch verloren gegangen
-  // oder man schickt zur sicherheit einfach ständig meldungen
-  /*if (touch_state != digitalRead(TOUCH_IN)){
-    #ifdef DEBUG
-      Serial.printf("Mismatch between last UDP send state (%s) and current pin state (%s)\n", touch_state? "true" : "false", digitalRead(TOUCH_IN)? "true" : "false");
-    #endif
-    if (digitalRead(TOUCH_IN) == HIGH){
-      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-      Udp.write(CLIENT_TOUCH_HIGH_MSG);
-      Udp.endPacket();
-      touch_state = HIGH;
-    }else{
-      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-      Udp.write(CLIENT_TOUCH_LOW_MSG);
-      Udp.endPacket();
-      touch_state = LOW;
-    }  
-  }
-  */
   
   // check for UDP commands from server
   int  packetSize = Udp.parsePacket();
