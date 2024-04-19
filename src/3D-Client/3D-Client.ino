@@ -32,7 +32,8 @@ bool    touch_state              = LOW;                   // current touch senso
 
 bool    high_command_acknowledge = true;                  // indicates if the sended HIGH command was acknowledge by the server, sometimes UDP packages seem to get lost
 bool    low_command_acknowledge  = true;                  // indicates if the sended LOW command was acknowledge by the server, sometimes UDP packages seem to get lost
-int     acknowledge_counter      = 0;                     // counter for timeout waiting for the server to replay to the high/low UDP command
+int     ackCounterLow            = 0;                     // counter for timeout waiting for the server to replay to the low UDP command
+int     ackCounterHigh           = 0;                     // counter for timeout waiting for the server to replay to the high UDP command
 char    packetBuffer[UDP_PACKET_MAX_SIZE];                // general buffer to hold UDP messages
 bool    batteryError             = false;                 // error with the battery
 bool    rssiError                = false;                 // error with the WLAN rssi
@@ -102,7 +103,7 @@ static inline void checkAliveCounter(void){
       // server alive messages are missing, but try to reconnect
       wlan_complete = false;                              // server is (temporary) dead the connection must be reestablisched
       server_alive_cnt++;                                 // keep incrementing server alive counter during reconnect tries
-       #ifdef DEBUG
+      #ifdef DEBUG
         Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals. Going to sleep\n", server_alive_cnt);
       #endif
       aliveCounterError = true;                           // set red LED to indicate error
@@ -124,7 +125,6 @@ static inline void checkAliveCounter(void){
 static inline void checkBatteryVoltage(void){
   float batVoltage = (ESP.getVcc() / 1000.0);            // recalculate the sensor value to the battery voltage
 
-  // ##################hier ist eigentlich alles immer gleich nur die message ändert sich 
   if (batVoltage < BAT_LOW_VOLT){
     if (batVoltage < BAT_CRIT_VOLT){                      // check if battery voltage is critical
         
@@ -355,31 +355,34 @@ void loop(void){
     delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   }
 
- //##################################acknowledge_counter doppelt machen###########################
   //increase the counter, if an LOW/HIGH acknowledge from the server is pending
-   if ((low_command_acknowledge == false)||(high_command_acknowledge == false)){
-      acknowledge_counter++;                              // increase server acknowledge counter if client waits for a LOW/HIGH reply from the server
-   }
+   if (low_command_acknowledge == false)
+      ackCounterLow++;                              // increase server acknowledge counter if client waits for a LOW/HIGH reply from the server
 
-   //Re-send LOW/HIGH messages to server if server does not reply within time out (avoid crash during sensing)
-   if (acknowledge_counter > SERVER_AQUN_CNT_MAX){
+   if (high_command_acknowledge == false)
+      ackCounterHigh++;                              // increase server acknowledge counter if client waits for a LOW/HIGH reply from the server
 
+   //Re-send LOW messages to server if server does not reply within time out (avoid crash during sensing)
+   if (ackCounterLow > SERVER_AQUN_CNT_MAX){
      if(low_command_acknowledge == false){
         #ifdef DEBUG
             Serial.printf("loop(): Acknowledge timeout error for LOW message, trying to re-transmit\n");
         #endif
         doSensorLow();                                    // server did not answer to low message from client, re-transmit
-        acknowledge_counter = 0;                          // reset counter for re-transmitting low message
-        touchStateError     = true;
+        ackCounterLow       = 0;                          // reset counter for re-transmitting low message
+        touchStateError     = true;                       // indicate error by red LED
      }
+   }
 
+   //Re-send HIGH messages to server if server does not reply within time out (avoid CNC crash during sensing)
+   if (ackCounterHigh > SERVER_AQUN_CNT_MAX){
      if(high_command_acknowledge == false){
         #ifdef DEBUG
             Serial.printf("loop(): Acknowledge timeout error for HIGH message, trying to re-transmit\n");
         #endif
         doSensorHigh();                                   // server did not answer to low message from client, re-transmit
-        acknowledge_counter = 0;                          // reset counter for re-transmitting low message
-        touchStateError     = true;
+        ackCounterHigh      = 0;                          // reset counter for re-transmitting low message
+        touchStateError     = true;                       // indicate error by red LED
      }
    }
   
@@ -397,83 +400,79 @@ void loop(void){
         Serial.println("loop(): Detected sleep command\nGoing to deep sleep...");
       #endif
       ESP.deepSleep(0); // goto deep sleep, awake by external reset pin
-    }else{
-        
-      //receiving alive message from server and resetting the alive counter
-      if(!strcmp(packetBuffer, SERVER_ALIVE_MSG)){
-        #ifdef DEBUG
-          Serial.println("loop(): Detected server alive command\n");
-        #endif
-        server_alive_cnt = 0; //reset alive counter for server 
-      }else{
-          
-        //receiving hello message from server
-        if(!strcmp(packetBuffer, SERVER_HELLO_MSG)){
-          #ifdef DEBUG
-            Serial.println("loop(): Detected server hello command, send a reply");
-          #endif
-          Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-          Udp.write(CLIENT_REPLY_MSG);
-          Udp.endPacket();
-        }else{
-            
-          //receiving reply message from server
-          if(!strcmp(packetBuffer, SERVER_REPLY_MSG)){
-            #ifdef DEBUG
-              Serial.println("loop(): Detected server reply message.");
-            #endif
-          }else{
-              
-            //receiving HIGH acknowledge message from server
-            if(!strcmp(packetBuffer, CLIENT_TOUCH_HIGH_MSG)){
-                #ifdef DEBUG
-                  Serial.println("loop(): Detected HIGH acknowledge message from server.");
-                #endif
-                high_command_acknowledge = true;
-                acknowledge_counter = 0;
-                #ifdef CYCLETIME
-                        eTimeHigh = asm_ccount();             //take end time for client to server to client cycle time measurement
-                        #ifdef DEBUG
-                          Serial.printf("loop(): Measured UDP cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(eTimeHigh - bTimeHigh)));
-                        #endif
-                        //send cycles to server e.g. to be displayed by the webserver
-                        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-                        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeHigh - bTimeHigh)); // pack end-time minus begin-time into a message
-                        Udp.write(cycle_msg.c_str());
-                        Udp.endPacket();
-                #endif
-            }else{
-
-                //receiving LOW acknowledge message from server
-                if(!strcmp(packetBuffer, CLIENT_TOUCH_LOW_MSG)){
-                    #ifdef DEBUG
-                      Serial.println("loop(): Detected LOW acknowledge message from server.");
-                    #endif
-                    low_command_acknowledge = true;
-                    acknowledge_counter = 0;
-                    #ifdef CYCLETIME
-                        eTimeLow = asm_ccount();             //take end time for client to server to client cycle time measurement
-                        #ifdef DEBUG
-                          Serial.printf("loop(): Measured UDP cycle time for sensor LOW activation: %u ticks\n", ((uint32_t)(eTimeLow - bTimeLow)));
-                        #endif
-                        //send cycles to server e.g. to be displayed by the webserver
-                        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-                        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeLow - bTimeLow)); // pack end-time minus begin-time into a message
-                        Udp.write(cycle_msg.c_str());
-                        Udp.endPacket();
-                    #endif
-                }else{
-
-                    //receiving unknown message from server
-                    #ifdef DEBUG
-                      Serial.println("loop(): Detected unknown command");
-                    #endif
-                } // end CLIENT_TOUCH_LOW_MSG
-            } // end CLIENT_TOUCH_HIGH_MSG
-          } // end SERVER_REPLY_MSG
-        } // end SERVER_HELLO_MSG
-      }
     }
+
+    //receiving alive message from server and resetting the alive counter
+    if(!strcmp(packetBuffer, SERVER_ALIVE_MSG)){
+      #ifdef DEBUG
+        Serial.println("loop(): Detected server alive command\n");
+      #endif
+      server_alive_cnt = 0; //reset alive counter for server
+    }
+
+    //receiving hello message from server
+    if(!strcmp(packetBuffer, SERVER_HELLO_MSG)){
+      #ifdef DEBUG
+        Serial.println("loop(): Detected server hello command, send a reply");
+      #endif
+      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+      Udp.write(CLIENT_REPLY_MSG);
+      Udp.endPacket();
+    }
+    
+    //receiving reply message from server
+    if(!strcmp(packetBuffer, SERVER_REPLY_MSG)){
+      #ifdef DEBUG
+        Serial.println("loop(): Detected server reply message.");
+      #endif
+    }
+
+    //receiving HIGH acknowledge message from server
+    if(!strcmp(packetBuffer, CLIENT_TOUCH_HIGH_MSG)){
+      #ifdef DEBUG
+        Serial.println("loop(): Detected HIGH acknowledge message from server.");
+      #endif
+      high_command_acknowledge = true;
+      ackCounterHigh           = 0;
+      #ifdef CYCLETIME
+        eTimeHigh = asm_ccount();             //take end time for client to server to client cycle time measurement
+        #ifdef DEBUG
+          Serial.printf("loop(): Measured UDP cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(eTimeHigh - bTimeHigh)));
+        #endif
+        //send cycles to server e.g. to be displayed by the webserver
+        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeHigh - bTimeHigh)); // pack end-time minus begin-time into a message
+        Udp.write(cycle_msg.c_str());
+        Udp.endPacket();
+      #endif
+    }
+
+       //receiving LOW acknowledge message from server
+       if(!strcmp(packetBuffer, CLIENT_TOUCH_LOW_MSG)){
+       #ifdef DEBUG
+         Serial.println("loop(): Detected LOW acknowledge message from server.");
+       #endif
+       low_command_acknowledge = true;
+       ackCounterLow           = 0;
+       #ifdef CYCLETIME
+          eTimeLow = asm_ccount();             //take end time for client to server to client cycle time measurement
+        #ifdef DEBUG
+          Serial.printf("loop(): Measured UDP cycle time for sensor LOW activation: %u ticks\n", ((uint32_t)(eTimeLow - bTimeLow)));
+        #endif
+        //send cycles to server e.g. to be displayed by the webserver
+        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+        String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeLow - bTimeLow)); // pack end-time minus begin-time into a message
+        Udp.write(cycle_msg.c_str());
+        Udp.endPacket();
+      #endif
+    }
+    /*
+    //receiving unknown message from server
+    #ifdef DEBUG
+      Serial.println("loop(): Detected unknown command");
+    #endif
+    */
+   
   }//if (packetSize)
 } //end loop()
 
