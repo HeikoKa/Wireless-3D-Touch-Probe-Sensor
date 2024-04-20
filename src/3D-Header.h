@@ -21,7 +21,7 @@
 
 namespace CncSensor{
  
-  const char*        ssid                   = "3D-Touch-WIFI";          // WLAN network name
+  const char*        SSID                   = "3D-Touch-WIFI";          // WLAN network name
   const char*        password               = "123456789";              // WLAN password
 
   //server consts 
@@ -38,6 +38,7 @@ namespace CncSensor{
   const char*        CLIENT_TOUCH_HIGH_MSG  = "high";                   // UDP message from client if 3D touch probe is high
   const char*        CLIENT_TOUCH_LOW_MSG   = "low";                    // UDP message from client if 3D touch probe is low
   const char*        CLIENT_ALIVE_MSG       = "alive";                  // UDP message from client alive
+  const char*        CLIENT_RSSI_MSG        = "rssi";                   // UDP message from client with rssi (WLAN signal strength)
   const char*        CLIENT_CYCLE_MSG       = "CYC:";                   // UDP message from client to server to transmit the last measured cycle time ticks
   const int          SERVER_ALIVE_CNT_MAX   = 1;                        // [24.03.24] reduced von 5 to 1, maximum server alive counter value, try to reconnect
   const int          SERVER_ALIVE_CNT_DEAD  = 2;                        // [24.03.24] reduced von 5 to 2, maximum server alive counter value, server seems to be dead
@@ -62,8 +63,8 @@ namespace CncSensor{
   unsigned int      clientUdpPort           = 4210;                     // client port to listen on
 
   //Battery consts
-  const float       BAT_LOW_VOLT            = 2.9;                      // battery voltage below this are indicated as low battery state
-  const float       BAT_CRIT_VOLT           = 2.7;                      // battery voltage below this are indicated as critical battery state
+  const float       BAT_LOW_VOLT            = 2.9;                      // battery voltage below this, is indicated as low battery state
+  const float       BAT_CRIT_VOLT           = 2.7;                      // battery voltage below this, is indicated as critical battery state
   const char*       CLIENT_BAT_OK_MSG       = "bat ok";                 // UDP message for battery voltage is ok
   const int         CLIENT_BAT_OK           = 1;                        // internal coding for battery is ok
   const char*       CLIENT_BAT_LOW_MSG      = "bat low";                // UDP message for battery is low 

@@ -11,11 +11,7 @@
   //        renamed BAT_OUT to CLIENT_ERROR_OUT  
 
   //TODO
-  // version check during runtime (client and server have the same or compatible version)
-  // Versuch starten auf tcp umstellen, obwohl der Overhead vermutlich zu groß ist
-  // transfer battery voltage and RSSI to server for displaying in webserver
-  // touchStateError wird niemals zurückgesetzt
-  // send signal strength to server
+  
   
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
@@ -65,7 +61,7 @@ long    rssi;                                             // WLAN signal strengt
       Udp.write(CLIENT_TOUCH_HIGH_MSG);
       Udp.endPacket();
       high_command_acknowledge = false;                   // set acknowledge to false until the server responses with the same command
-      touch_state = HIGH;                                 // remember the current state
+      touch_state              = HIGH;                    // remember the current state
       #ifdef CYCLETIME
         bTimeHigh = asm_ccount();                         // take begin time for client to server to client cycle time measurement
       #endif
@@ -79,41 +75,41 @@ static inline void doSensorLow(void){
     Serial.println(CLIENT_TOUCH_LOW_MSG);
   #endif
   if (wlan_complete){
-      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());  // send UDP packet to server to indicate the 3D touch change
-      Udp.write(CLIENT_TOUCH_LOW_MSG);
-      Udp.endPacket();
-      low_command_acknowledge = false;                    // set acknowledge to false until the server responses with the same command
-      touch_state = LOW;                                  // remember the current state
-      #ifdef CYCLETIME
-        bTimeLow = asm_ccount();                          // take begin time for client to server to client cycle time measurement
-      #endif
-  }
+    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());  // send UDP packet to server to indicate the 3D touch change
+    Udp.write(CLIENT_TOUCH_LOW_MSG);
+    Udp.endPacket();
+    low_command_acknowledge = false;                    // set acknowledge to false until the server responses with the same command
+    touch_state             = LOW;                      // remember the current state
+    #ifdef CYCLETIME
+      bTimeLow = asm_ccount();                          // take begin time for client to server to client cycle time measurement
+    #endif
+  } //wlan_complete
 }
 
 
 static inline void checkAliveCounter(void){
   if (server_alive_cnt < SERVER_ALIVE_CNT_MAX){
-    server_alive_cnt++;                                   // increase "the server has not answered" alive counter
     #ifdef DEBUG
       Serial.printf("checkAliveCounter(): Server alive counter current: %d, max reconnect: %d, max server dead: %d\n", server_alive_cnt, SERVER_ALIVE_CNT_MAX, SERVER_ALIVE_CNT_DEAD);
     #endif
-    aliveCounterError = false;                            // no error no red LED
+    server_alive_cnt++;                                   // increase "the server has not answered" alive counter
+    aliveCounterError = false;                            // no error, no red LED
   }else{
     if (server_alive_cnt < SERVER_ALIVE_CNT_DEAD){
       // server alive messages are missing, but try to reconnect
-      wlan_complete = false;                              // server is (temporary) dead the connection must be reestablisched
-      server_alive_cnt++;                                 // keep incrementing server alive counter during reconnect tries
       #ifdef DEBUG
         Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals. Going to sleep\n", server_alive_cnt);
       #endif
+      server_alive_cnt++;                                 // keep incrementing server alive counter during reconnect tries
+      wlan_complete     = false;                          // server is (temporary?) dead the connection must be re-establisched
       aliveCounterError = true;                           // set red LED to indicate error
     }else{
       // server seems to be dead, client goes to sleep
       #ifdef DEBUG
         Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals. Going to sleep\n", server_alive_cnt);
       #endif
-      wlan_complete     = false;
       server_alive_cnt  = 0;
+      wlan_complete     = false;
       aliveCounterError = true;                           // set red LED to indicate error
       ESP.deepSleep(0);                                   // go to deep sleep, reset pin to wake up
     } // end if SERVER_ALIVE_CNT_DEAD 
@@ -123,41 +119,34 @@ static inline void checkAliveCounter(void){
 
 
 static inline void checkBatteryVoltage(void){
-  float batVoltage = (ESP.getVcc() / 1000.0);            // recalculate the sensor value to the battery voltage
+  String cycle_msg;
+  float batVoltage = (ESP.getVcc() / 1000.0);            // measure battery voltage and recalculate the sensor value to the battery voltage
 
   if (batVoltage < BAT_LOW_VOLT){
     if (batVoltage < BAT_CRIT_VOLT){                      // check if battery voltage is critical
-        
-        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-        String cycle_msg = CLIENT_BAT_CRITICAL_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
-        Udp.write(cycle_msg.c_str());
-        Udp.endPacket();
-        #ifdef DEBUG
-          Serial.printf("checkBatteryVoltage(): Voltage is critical, current value is ");
-          Serial.println(batVoltage);
-        #endif
-        batteryError = true;
-      }else{                                              // battery is only low
-        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-        String cycle_msg = CLIENT_BAT_LOW_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
-        Udp.write(cycle_msg.c_str());
-        Udp.endPacket();
-        #ifdef DEBUG
-          Serial.printf("checkBatteryVoltage(): Voltage is low, current value is ");
-          Serial.println(batVoltage);
-        #endif
-        batteryError = true;
-      }
+      cycle_msg = CLIENT_BAT_CRITICAL_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
+      #ifdef DEBUG
+        Serial.printf("checkBatteryVoltage(): Voltage is critical, current value is ");
+        Serial.println(batVoltage);
+      #endif
+    }else{                                                // battery is only low
+      cycle_msg = CLIENT_BAT_LOW_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
+      #ifdef DEBUG
+        Serial.printf("checkBatteryVoltage(): Voltage is low, current value is ");
+        Serial.println(batVoltage);
+      #endif
+    }
+    batteryError = true;                                  // indicate low or critical battery by LED
   }else{                                                  // battery is ok
-      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-      String cycle_msg = CLIENT_BAT_OK_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
-      Udp.write(cycle_msg.c_str());
-      Udp.endPacket();
+    cycle_msg = CLIENT_BAT_OK_MSG + String(batVoltage);   // pack message and bat voltage in the UDP frame
     #ifdef DEBUG
       Serial.printf("checkBatteryVoltage(): Bat Voltage is ok, measured value is %.2fV (low bat is %.2fV and critical bat is %.2fV)\n", batVoltage, BAT_LOW_VOLT, BAT_CRIT_VOLT);
     #endif
     batteryError = false;
   }
+  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+  Udp.write(cycle_msg.c_str());
+  Udp.endPacket();
 }
 
 
@@ -185,17 +174,21 @@ static inline void checkWlanStatus(void) {
       rssiError = false;
     }
   } //end if (wlan_complete)
+  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+  String cycle_msg = CLIENT_RSSI_MSG + String(rssi);   // pack message and rssi in the UDP frame
+  Udp.write(cycle_msg.c_str());
+  Udp.endPacket();
 } //end void checkWlanStatus()
 
 
 static inline void sendAliveMsg(void) {
-    // send alive message regardless of the WLAN state and if connection is established
-    #ifdef DEBUG
-      Serial.printf("sendAliveMsg(): Sending UDP alive message to server\n");
-    #endif
-    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-    Udp.write(CLIENT_ALIVE_MSG);
-    Udp.endPacket();
+  // send alive message regardless of the WLAN state and if connection is established
+  #ifdef DEBUG
+    Serial.printf("sendAliveMsg(): Sending UDP alive message to server\n");
+  #endif
+  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+  Udp.write(CLIENT_ALIVE_MSG);
+  Udp.endPacket();
 }
 
 static inline void setErrorLED(bool batteryError, bool rssiError, bool touchStateError, bool aliveCounterError){
@@ -204,7 +197,6 @@ static inline void setErrorLED(bool batteryError, bool rssiError, bool touchStat
   else
     digitalWrite(CLIENT_ERROR_OUT, HIGH);               // switch off light if no error is reported
 }
-
 
 static inline void doService(void) {
   // Does all service activities that are called regularly by timer interrupt
@@ -227,13 +219,13 @@ void ICACHE_RAM_ATTR serviceIsr(void){                    // timer interrupt ser
 
 
 void wlanInit(void){
-  WiFi.config(clientIpAddr, gateway, subnet);             // set manual IP address if in Soft Access Point (SAP) mode and no DHCP is available
+  WiFi.config(clientIpAddr, gateway, subnet);             // set manual IP address if in Soft Access Point (SAP) mode
   #ifdef DEBUG
     Serial.println("\n\n");
-    Serial.printf("wlanInit(): Connecting to %s ", ssid);
+    Serial.printf("wlanInit(): Connecting to %s ", SSID);
   #endif
   
-  WiFi.begin(ssid, password);                             // connect to WLAN 
+  WiFi.begin(SSID, password);                             // connect to WLAN 
   while (WiFi.status() != WL_CONNECTED){                  // stay in this loop until a WLAN connection could be established
     digitalWrite(WLAN_LED, HIGH);                         // blink WLAN LED slowly to indicate connection try
     delay(SLOW_BLINK);
@@ -349,7 +341,6 @@ void loop(void){
     delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   }
   
-
   if ((digitalRead(TOUCH_IN) == LOW) && (touch_state == HIGH)){
     doSensorLow();
     delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
@@ -357,20 +348,20 @@ void loop(void){
 
   //increase the counter, if an LOW/HIGH acknowledge from the server is pending
    if (low_command_acknowledge == false)
-      ackCounterLow++;                              // increase server acknowledge counter if client waits for a LOW/HIGH reply from the server
+      ackCounterLow++;                                    // increase server acknowledge counter if client waits for a LOW/HIGH reply from the server
 
    if (high_command_acknowledge == false)
-      ackCounterHigh++;                              // increase server acknowledge counter if client waits for a LOW/HIGH reply from the server
+      ackCounterHigh++;                                   // increase server acknowledge counter if client waits for a LOW/HIGH reply from the server
 
-   //Re-send LOW messages to server if server does not reply within time out (avoid crash during sensing)
+   //Re-send LOW messages to server if server does not reply within time out (avoid cnc crash during sensing)
    if (ackCounterLow > SERVER_AQUN_CNT_MAX){
      if(low_command_acknowledge == false){
         #ifdef DEBUG
-            Serial.printf("loop(): Acknowledge timeout error for LOW message, trying to re-transmit\n");
+          Serial.printf("loop(): Acknowledge timeout error for LOW message, trying to re-transmit\n");
         #endif
         doSensorLow();                                    // server did not answer to low message from client, re-transmit
-        ackCounterLow       = 0;                          // reset counter for re-transmitting low message
-        touchStateError     = true;                       // indicate error by red LED
+        ackCounterLow   = 0;                              // reset counter for re-transmitting low message
+        touchStateError = true;                           // indicate error by red LED
      }
    }
 
@@ -378,11 +369,11 @@ void loop(void){
    if (ackCounterHigh > SERVER_AQUN_CNT_MAX){
      if(high_command_acknowledge == false){
         #ifdef DEBUG
-            Serial.printf("loop(): Acknowledge timeout error for HIGH message, trying to re-transmit\n");
+          Serial.printf("loop(): Acknowledge timeout error for HIGH message, trying to re-transmit\n");
         #endif
         doSensorHigh();                                   // server did not answer to low message from client, re-transmit
-        ackCounterHigh      = 0;                          // reset counter for re-transmitting low message
-        touchStateError     = true;                       // indicate error by red LED
+        ackCounterHigh  = 0;                              // reset counter for re-transmitting low message
+        touchStateError = true;                           // indicate error by red LED
      }
    }
   
@@ -402,7 +393,7 @@ void loop(void){
       ESP.deepSleep(0); // goto deep sleep, awake by external reset pin
     }
 
-    //receiving alive message from server and resetting the alive counter
+    // receiving alive message from server and resetting the alive counter
     if(!strcmp(packetBuffer, SERVER_ALIVE_MSG)){
       #ifdef DEBUG
         Serial.println("loop(): Detected server alive command\n");
@@ -410,7 +401,7 @@ void loop(void){
       server_alive_cnt = 0; //reset alive counter for server
     }
 
-    //receiving hello message from server
+    // receiving hello message from server
     if(!strcmp(packetBuffer, SERVER_HELLO_MSG)){
       #ifdef DEBUG
         Serial.println("loop(): Detected server hello command, send a reply");
@@ -420,20 +411,20 @@ void loop(void){
       Udp.endPacket();
     }
     
-    //receiving reply message from server
+    // receiving reply message from server and do nothing
     if(!strcmp(packetBuffer, SERVER_REPLY_MSG)){
       #ifdef DEBUG
         Serial.println("loop(): Detected server reply message.");
       #endif
     }
 
-    //receiving HIGH acknowledge message from server
+    // receiving HIGH acknowledge message from server
     if(!strcmp(packetBuffer, CLIENT_TOUCH_HIGH_MSG)){
       #ifdef DEBUG
         Serial.println("loop(): Detected HIGH acknowledge message from server.");
       #endif
       high_command_acknowledge = true;
-      ackCounterHigh           = 0;
+      ackCounterHigh           = 0;                       // reset counter, when receiving the server acknowledge message
       #ifdef CYCLETIME
         eTimeHigh = asm_ccount();             //take end time for client to server to client cycle time measurement
         #ifdef DEBUG

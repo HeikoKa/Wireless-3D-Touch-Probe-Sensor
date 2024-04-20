@@ -1,7 +1,7 @@
 /**  server
   *   
   *  @author Heiko Kalte  
-  *  @date 04.04.2024 
+  *  @date 20.04.2024 
   * 
   *  @version 2.1
   */
@@ -25,12 +25,6 @@
 using namespace CncSensor;
 
 //TODOs
-//#################### es verbinden sich jetzt zwei clients mit dem server, einmal der client und einmal ein Rechner am webserver, dads muss berücksichtigt werden
-// WLAN access mode https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/soft-access-point-examples.html
-// ESP8266WebServer server(80);            //setup webserver: https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266WiFi/examples/WiFiAccessPoint/WiFiAccessPoint.ino
-// Allow asking for version to prevent client, server, header version mix
-// It is more usefull to provide a webserver by the client, otherwise all status Data must be transfered to the server
-// Signal strength empfangen
 
 
 int       clientBatteryStatus        = CLIENT_BAT_OK;       // init with battery is ok
@@ -63,7 +57,7 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     float average = 0;
     char dstring[10];
 
-    //####################################### html ausgabe stat
+    //####################################### html ausgabe start
 
     strcpy(ticksString, "Client Ticks measurement:\n\t");
     for (i= 0; i <= SERVER_TICKS_ARRAY_SIZE-1; i++){
@@ -336,7 +330,7 @@ void setup(){
       Serial.print("setup(): Setting Soft-AP...");
   #endif
   WiFi.softAPConfig(serverIpAddr, gateway, subnet);
-  boolean result = WiFi.softAP(ssid, password);
+  boolean result = WiFi.softAP(SSID, password);
   if(result == true){
     #ifdef DEBUG
       Serial.println("Ready");
@@ -476,6 +470,16 @@ void loop(){
                 Serial.printf("loop(): Received Cycle measurement message from client: %d ticks\n", ticks);
             #endif
         }
+
+        //received rssi 
+        if (!strncmp (packetBuffer, CLIENT_RSSI_MSG, strlen(CLIENT_RSSI_MSG))){      // trying to decod the CLIENT_RSSI_MSG prefix from the msg
+            char *temp = packetBuffer + strlen(CLIENT_RSSI_MSG);                    // cut/decode the raw number of ticks out of the client message
+            int rssi = atoi(temp);
+            #ifdef DEBUG
+                Serial.printf("loop(): Received RSSI message from client: %d\n", rssi);
+            #endif
+        }
+
         /*
         // unknown command
         #ifdef DEBUG
