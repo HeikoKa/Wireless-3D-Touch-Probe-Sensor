@@ -1,7 +1,4 @@
-# 3D Touch Probe for CNCs/VMCs 
-
-
-
+# 3D Touch Probe Edge Finder for CNCs/VMCs 
 ## Description
 
 An in-depth paragraph about your project and overview of use.
