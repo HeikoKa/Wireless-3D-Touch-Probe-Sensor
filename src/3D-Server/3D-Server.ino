@@ -32,12 +32,13 @@ float     clientBateryVoltage        = 0.0;                  // client voltage
 bool      wlan_complete              = false;               // global variable to indicate if wlan connection is established completely 
 int       client_alive_counter       = 0;                   // client alive counter
 WiFiUDP   Udp;                                              // UDP object
+int       rssi;
 char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
 
 #ifdef CYCLETIME
-  int  ticks;                                             // ticks from client performance measurement
+  uint32  ticks;                                             // ticks from client performance measurement
   int  ticksArray[SERVER_TICKS_ARRAY_SIZE]={0};         // array of ticks from client performance measurement
-  char ticksString[10*SERVER_TICKS_ARRAY_SIZE];           // string of array tick 
+  char ticksString[20*SERVER_TICKS_ARRAY_SIZE];           // string of array tick 
   int ticks_pointer = 0; 
 
   static inline void setNewTicks(uint32 ticks){
@@ -57,22 +58,20 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     float average = 0;
     char dstring[10];
 
-    //####################################### html ausgabe start
-
-    strcpy(ticksString, "Client Ticks measurement:\n\t");
+    strcpy(ticksString, "<p>Client Ticks measurement:</p>");
     for (i= 0; i <= SERVER_TICKS_ARRAY_SIZE-1; i++){
       average = average + (float) ticksArray[i];                  // calculate average
       itoa(ticksArray[i], dstring, 10);                   // convert ticks integer to char/string
+      strcat(ticksString, "<p>");                         // concatenate message string with converted integer string
       strcat(ticksString, dstring);                       // concatenate message string with converted integer string
-      strcat(ticksString, "\n\t");                        // add new line and tab
+      strcat(ticksString, "</p>");                        // add new line and tab
     }
-    strcat(ticksString, "\nAverage ticks:");
+    strcat(ticksString, "\n<p>Average ticks:");
 
     average = average / SERVER_TICKS_ARRAY_SIZE;          // calculate final average of the ticks measurements
     sprintf(dstring, "%.2f", average); 
-    strcat(ticksString, "\n\t");                        // add new line and tab
     strcat(ticksString, dstring);
-
+    strcat(ticksString, "</p>");
     #ifdef DEBUG
       Serial.printf("getAllTicks(): %s\n", ticksString);
     #endif
@@ -86,55 +85,46 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     // root web page of the server
     void handleRoot() {
         //server.send(200, "text/html", "<h1>You are connected</h1>");
-        String message = getAllTicks();
-        message += "Ein neuer Taxt";
-        message += "noch ein neuer Text";
-
-/*
-
-          message += "DEBUG: not defined";                    #else        #ifdef DEBUG
+        String message = "<h1>Webserver 3D Touch Probe by Heiko Kalte (h.kalte@gmx.de)</h1>";
+        #ifdef CYCLETIME
+          message += getAllTicks();
+        #endif
+        // number of currently connected clients (usually 2, the sensor and a webbrowser)
+        message += "<p>Number of connected clients:";
+        message += WiFi.softAPgetStationNum();
+        message += "</p>";
+        #ifdef DEBUG
+          message += "<p>DEBUG: yes</p>";
+        #else
+          message += "<p>DEBUG: no</p>";
         #endif
         #ifdef CYCLETIME
-          message += "CYCLETIME: defined";
+          message += "<p>CYCLETIME: yes</p>";
         #else
-          message += "CYCLETIME: not defined";
+          message += "<p>CYCLETIME: no</p>";
         #endif
-        #ifdef WEBSERVER
-          message += "WEBSERVER: defined";
-        #else
-          message += "WEBSERVER: not defined";
-        #endif
-        #ifndef DEBUG
-        */
+
+        if (client_alive_counter < CLIENT_ALIVE_CNT_MAX){
+          message += "<p>Client alive: yes</p>";
+        }else{
+          message += "<p>Client alive: no</p>";
+        }
+        message += "<p>Client battery voltage:";
+        message += clientBateryVoltage;
+        message += "</p>";
+
+        message += "<p>Client WIFI strength:";
+        message += rssi;
+        message += "</p>";
+
         server.send(200, "text/html", message);
         
         //to display:
-        // Header
-        // präprozessor settings
         // Version of server and version of client
-        // client status
-        // durchschnitt von ticks 
+        // client 
+        // my IP expected client IP
+      
         // sending alive messages every x Sek
-        // Client Status (battery, WIFI signal, WLAN status)
-        
-            
-            /* https://forum.arduino.cc/t/webserver-ota-client-print-server-send/693298/30
-            // ################zusammenbau der Daten
-            void Datenzeigen() {
-              String message = "Daten angekommen\n";
-              message += "URI: ";
-              message += server.uri();
-              message += "\nMethod: ";
-              message += (server.method() == HTTP_GET) ? "GET" : "POST";
-              message += "\nArguments: ";
-              message += server.args();
-              message += "\n";
-              for (uint8_t i = 0; i < server.args(); i++) {
-                message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
-              }
-              Serial.println(message);
-            }
-            */
     }
 
     // requests that are different from root
@@ -296,6 +286,12 @@ void wlanInit(){
       delay(FAST_BLINK);
       yield(); 
     } //if (packetSize)
+    /*  ########################### damit der Webserver auch schon funktioniert, wenn der Client nicht verbunden ist
+    #ifdef WEBSERVER
+    //handle client access if webserver is enabled
+      server.handleClient();
+    #endif
+    */
   } //while(!wlan_complete)
 }//void wlanInit()
 
@@ -474,7 +470,7 @@ void loop(){
         //received rssi 
         if (!strncmp (packetBuffer, CLIENT_RSSI_MSG, strlen(CLIENT_RSSI_MSG))){      // trying to decod the CLIENT_RSSI_MSG prefix from the msg
             char *temp = packetBuffer + strlen(CLIENT_RSSI_MSG);                    // cut/decode the raw number of ticks out of the client message
-            int rssi = atoi(temp);
+            rssi = atoi(temp);
             #ifdef DEBUG
                 Serial.printf("loop(): Received RSSI message from client: %d\n", rssi);
             #endif

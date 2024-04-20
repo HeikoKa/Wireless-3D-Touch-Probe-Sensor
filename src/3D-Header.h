@@ -14,8 +14,8 @@
 #define CNCSENSOR_H_
 
 //#define DEBUG       // enable debug output via serial interface on client and server
-//#define CYCLETIME   // enable measuring the round trip delay from client to server back to client
-//#define WEBSERVER   // enable webserver
+#define CYCLETIME   // enable measuring the round trip delay from client to server back to client
+#define WEBSERVER   // enable webserver
 
 // Pinbelegung: https://fearby.com/wp-content/uploads/2022/03/WeMosMiniD1ProGuide.png
 
