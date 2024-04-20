@@ -1,11 +1,11 @@
 /**  Header
   *   
   *  @author Heiko Kalte  
-  *  @date 24.03.2024 
+  *  @date 20.04.2024 
   * 
-  *  @version 2.1
+  *  @version 0.1
   */
-  // 2.1:   Time measurement for directive CYCLETIME
+  // 0.1:   Time measurement for directive CYCLETIME
   //        Renamed Client BAT_LED to CLIENT_ERROR_OUT
   //        Reduced waiting times for "alive"
   //        New message CLIENT_CYCLE_MSG added 

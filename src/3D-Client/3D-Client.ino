@@ -1,14 +1,11 @@
 /**  Client
   *   
   *  @author Heiko Kalte  
-  *  @date 16.04.2024 
+  *  @date 20.04.2024 
   * 
-  *  @version 2.1
+  *  @version 0.1
   */
-  // 2.1:   Server is expected to responses each LOW/HIGH UDP Command
-  //        Time measurement for directive CYCLETIME (set in header file)
-  //        Set several fuctions with "static inline" attribute
-  //        renamed BAT_OUT to CLIENT_ERROR_OUT  
+  // 0.1:   initial version
 
   //TODO
   
@@ -40,14 +37,14 @@ long    rssi;                                             // WLAN signal strengt
 
 
 #ifdef CYCLETIME
-    int32_t bTimeLow, eTimeLow;
-    int32_t bTimeHigh, eTimeHigh;
+  int32_t bTimeLow, eTimeLow;
+  int32_t bTimeHigh, eTimeHigh;
 
-    static inline int32_t asm_ccount(void) {              // asm-helpers taken from https://sub.nanona.fi/esp8266/timing-and-ticks.html, reading the CCOUT register with clock ticks
-        int32_t r;
-        asm volatile ("rsr %0, ccount" : "=r"(r));
-        return r;
-    }
+  static inline int32_t asm_ccount(void) {              // asm-helpers taken from https://sub.nanona.fi/esp8266/timing-and-ticks.html, reading the CCOUT register with clock ticks
+    int32_t r;
+    asm volatile ("rsr %0, ccount" : "=r"(r));
+    return r;
+  }
 #endif
 
 

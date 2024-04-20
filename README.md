@@ -3,6 +3,17 @@
 
 An in-depth paragraph about your project and overview of use.
 
+## Features
+* client (3D touch probe) and server (base station) code 
+* based on UDP communication
+* many parameters
+* debug mode for detailed serial monitor print outs
+* optional webserver
+* optional round trip delay measurement
+* lost UDP message detection
+* battery voltage monitoring
+* WLAN signal strength monitoring
+
 ## Getting Started
 
 ### Dependencies

@@ -3,12 +3,10 @@
   *  @author Heiko Kalte  
   *  @date 20.04.2024 
   * 
-  *  @version 2.1
+  *  @version 0.1
   */
-  //  2.1   Send back HIGH and LOW messages from client to ensure the data was send correctly
-  //        set "static inline" attribute to some functions 
-  //        added basic webserver functions (prototype)
-  //        supporting cycle time measurement messages from the client
+  //  0.1   initial version
+
 
 #include <stdio.h>
 #include <stdlib.h>
