@@ -17,6 +17,14 @@ An in-depth paragraph about your project and overview of use.
 * send asleep feature to save battery
 * many more
 
+## Content of the repository
+* C/C++ code for ESP8266 client and server
+* Schematic of the electronics of both ESP8266 boards (not yet)
+* Eding CNC macro for inner/outer center finding (not yet)
+* Picture of the hardware and picture during build
+* Videos of the function (not yet)
+* Bill of material (not yet)
+
 ## Getting Started
 * get two ESP8266 and two mirco USB cables (not just a power USB cable it must support the serial communication)
 * download and setup Arduine IDE for the ESP8266

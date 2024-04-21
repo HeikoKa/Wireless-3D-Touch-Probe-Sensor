@@ -60,8 +60,8 @@ namespace CncSensor{
   IPAddress         subnet      (255,255,255,0);                        // subnet mask of WLAN network
 
   //global variables
-  unsigned int      serverUdpPort           = 4211;                     // server port to listen on
-  unsigned int      clientUdpPort           = 4210;                     // client port to listen on
+  unsigned int      serverUdpPort           = 4211;                     // server port
+  unsigned int      clientUdpPort           = 4210;                     // client port
 
   //Battery consts
   const float       BAT_LOW_VOLT            = 2.9;                      // battery voltage below this, is indicated as low battery state
