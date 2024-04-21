@@ -45,8 +45,8 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     if (ticks_pointer >= 9)
       ticks_pointer = 0;
     else
-      ticks_pointer++;
     ticksArray[ticks_pointer] = ticks;
+    ticks_pointer++;
     totalNumberTicks++;
   }
 
