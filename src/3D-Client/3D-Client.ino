@@ -49,13 +49,15 @@ long    rssi;                                             // WLAN signal strengt
 
 
  static inline void doSensorHigh(void){
+  String high_msg;
   digitalWrite(TOUCH_LED, LOW);                           // indicate the current touch state by LED output
   #ifdef DEBUG
     Serial.println(CLIENT_TOUCH_HIGH_MSG);
   #endif
   if (wlan_complete){
-      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());  // send UDP packet to server to indicate the 3D touch change 
-      Udp.write(CLIENT_TOUCH_HIGH_MSG);
+      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());          // send UDP packet to server to indicate the 3D touch change 
+      high_msg = CLIENT_TOUCH_HIGH_MSG + String(touchStateError); // put the current touch error state into the UDP message
+      Udp.write(high_msg.c_str());
       Udp.endPacket();
       high_command_acknowledge = false;                   // set acknowledge to false until the server responses with the same command
       touch_state              = HIGH;                    // remember the current state
@@ -67,13 +69,15 @@ long    rssi;                                             // WLAN signal strengt
 
 
 static inline void doSensorLow(void){
+  String low_msg;
   digitalWrite(TOUCH_LED, HIGH);                          // indicate the current touch state by LED output
   #ifdef DEBUG
     Serial.println(CLIENT_TOUCH_LOW_MSG);
   #endif
   if (wlan_complete){
-    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());  // send UDP packet to server to indicate the 3D touch change
-    Udp.write(CLIENT_TOUCH_LOW_MSG);
+    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());        // send UDP packet to server to indicate the 3D touch change
+    low_msg = CLIENT_TOUCH_LOW_MSG + String(touchStateError); // put the current touch error state into the UDP message
+    Udp.write(low_msg.c_str());
     Udp.endPacket();
     low_command_acknowledge = false;                    // set acknowledge to false until the server responses with the same command
     touch_state             = LOW;                      // remember the current state

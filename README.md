@@ -14,11 +14,14 @@ An in-depth paragraph about your project and overview of use.
 * battery voltage monitoring
 * WLAN signal strength monitoring
 * client and server alive monitoring
-* send asleep feature to save battery
+* wake up 3D touch client by touching the sensor by hand or by CNC maschine
+* send client asleep feature to save battery life
+* easy recharging of the client battery by magnetic USB cable
 * many more
 
 ## Content of the repository
 * C/C++ code for ESP8266 client and server
+* 3D Fusion 360 model of the 3d touch sensor
 * Schematic of the electronics of both ESP8266 boards (not yet)
 * Eding CNC macro for inner/outer center finding (not yet)
 * Picture of the hardware and picture during build
@@ -33,11 +36,6 @@ An in-depth paragraph about your project and overview of use.
 * enable DEBUG mode in the header file for the first runs to get as many infos as possible
 * compile and download files for client and server
 
-
-### Dependencies
-
-* Describe any prerequisites, libraries, OS version, etc., needed before installing program.
-* ex. Windows 10
 
 ### Installing
 
@@ -55,9 +53,7 @@ code blocks for commands
 ## Help
 
 Any advise for common problems or issues.
-```
-command to run if program contains helper info
-```
+
 
 ## Authors
 
@@ -68,9 +64,6 @@ ex. [@DomPizzie](https://twitter.com/dompizzie)
 
 ## Version History
 
-* 0.2
-    * Various bug fixes and optimizations
-    * See [commit change]() or See [release history]()
 * 0.1
     * Initial Release
 
@@ -78,11 +71,3 @@ ex. [@DomPizzie](https://twitter.com/dompizzie)
 
 This project is licensed under the [NAME HERE] License - see the LICENSE.md file for details
 
-## Acknowledgments
-
-Inspiration, code snippets, etc.
-* [awesome-readme](https://github.com/matiassingers/awesome-readme)
-* [PurpleBooth](https://gist.github.com/PurpleBooth/109311bb0361f32d87a2)
-* [dbader](https://github.com/dbader/readme-template)
-* [zenorocha](https://gist.github.com/zenorocha/4526327)
-* [fvcproductions](https://gist.github.com/fvcproductions/1bfc2d4aecb01a834b46)

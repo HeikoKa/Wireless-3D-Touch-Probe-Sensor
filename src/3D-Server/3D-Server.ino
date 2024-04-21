@@ -26,8 +26,9 @@ using namespace CncSensor;
 
 
 int       clientBatteryStatus        = CLIENT_BAT_OK;       // init with battery is ok
-float     clientBateryVoltage        = 0.0;                  // client voltage
+float     clientBateryVoltage        = 0.0;                 // client voltage
 bool      wlan_complete              = false;               // global variable to indicate if wlan connection is established completely 
+bool      msg_lost                   = false;               // did a UDP message got lost
 int       client_alive_counter       = 0;                   // client alive counter
 WiFiUDP   Udp;                                              // UDP object
 int       rssi;
@@ -35,9 +36,10 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
 
 #ifdef CYCLETIME
   uint32  ticks;                                            // ticks from client performance measurement
-  int  ticksArray[SERVER_TICKS_ARRAY_SIZE]={0};             // array of ticks from client performance measurement
-  char ticksString[50*SERVER_TICKS_ARRAY_SIZE];             // string of array tick 
-  int ticks_pointer = 0; 
+  int    ticksArray[SERVER_TICKS_ARRAY_SIZE]={0};             // array of ticks from client performance measurement
+  char   ticksString[50*SERVER_TICKS_ARRAY_SIZE];             // string of array tick 
+  int    ticks_pointer    = 0;
+  uint32 totalNumberTicks = 0; 
 
   static inline void setNewTicks(uint32 ticks){
     if (ticks_pointer >= 9)
@@ -45,6 +47,7 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     else
       ticks_pointer++;
     ticksArray[ticks_pointer] = ticks;
+    totalNumberTicks++;
   }
 
   static inline uint32 getLatestTicks(){
@@ -57,20 +60,24 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     char dstring[50];
 
     strcpy(ticksString, "<p>Client Ticks measurement:</p>");
+    strcat(ticksString, "\n<p>Total number of measured ticks: ");
+    sprintf(dstring, "%d", totalNumberTicks);
+    strcat(ticksString, dstring);
+    strcat(ticksString, "</p>");                      
+
     for (i= 0; i <= SERVER_TICKS_ARRAY_SIZE-1; i++){
-      average = average + (float) ticksArray[i];                  // calculate average
-      //float dummy = ticksArray[i] * NANOSEC_PER_TICK;
-      //itoa(ticksArray[i], dstring, 10);                   // convert ticks integer to char/string
-      // ####################### hier könnte noch ein Fehler sein #####################################
+      average = average + (float) ticksArray[i];          // sum up ticks for average calculationte average
       sprintf(dstring, "%d: %d, %.2fms", i, ticksArray[i], ((float)ticksArray[i] * NANOSEC_PER_TICK / 1000000)); 
-      strcat(ticksString, "<p>");                         // concatenate message string with converted integer string
-      strcat(ticksString, dstring);                       // concatenate message string with converted integer string
-      strcat(ticksString, "</p>");                        // add new line and tab
+      strcat(ticksString, "<p>");                         // concatenate message string for webserver
+      strcat(ticksString, dstring);                       // concatenate message string for webserver
+      strcat(ticksString, "</p>");                        // concatenate message string for webserver
     }
     
-    // ############################### falsche ergebnisse bei weniger als 10 einträgen
-    strcat(ticksString, "\n<p>Average ticks/ms:");
-    average = average / SERVER_TICKS_ARRAY_SIZE;          // calculate final average of the ticks measurements
+    strcat(ticksString, "\n<p>Average ticks/ms: ");
+    if (totalNumberTicks < SERVER_TICKS_ARRAY_SIZE)       // check if tick array is already full 
+      average = average / totalNumberTicks;               // calculate final average of the ticks measurements
+    else
+      average = average / SERVER_TICKS_ARRAY_SIZE;        // calculate final average of the ticks measurements
     sprintf(dstring, "%.2f, %.2fms", average, (average * NANOSEC_PER_TICK / 1000000)); 
     strcat(ticksString, dstring);
     strcat(ticksString, "</p>");
@@ -80,17 +87,21 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     #endif
     return ticksString;
   }
-
 #endif //CYCLETIME
 
 #ifdef WEBSERVER
+      //to display:
+        // Version of server and version of client
+        // my IP expected client IP
+        // sending alive messages every x Sek
+
     ESP8266WebServer server(80);
+    
     // root web page of the server
     void handleRoot() {
-        //server.send(200, "text/html", "<h1>You are connected</h1>");
-        String message = "<h1>Webserver 3D Touch Probe by Heiko Kalte (h.kalte@gmx.de)</h1>";
-        // number of currently connected clients (usually 2, the sensor and a webbrowser)
-        message += "<p>Number of connected clients:";
+        String message = "<h1>Webserver 3D Touch Probe</h1>";
+        message += "<h3>by Heiko Kalte (h.kalte@gmx.de)</h3>";
+        message += "<p>Number of connected clients: ";
         message += WiFi.softAPgetStationNum();
         message += "</p>";
         #ifdef DEBUG
@@ -104,16 +115,36 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
           message += "<p>Server CYCLETIME: no</p>";
         #endif
 
-        if (client_alive_counter < CLIENT_ALIVE_CNT_MAX){
+        if (client_alive_counter < CLIENT_ALIVE_CNT_MAX)
           message += "<p>Client alive: yes</p>";
-        }else{
+        else
           message += "<p>Client alive: no</p>";
+
+        if (msg_lost == true)
+          message += "<p>Lost UDP message: true</p>";
+        else
+          message += "<p>Lost UDP message: false</p>";
+
+        switch (clientBatteryStatus){
+            case CLIENT_BAT_OK:
+                message += "<p>Client battery status: ok</p>";
+                break;
+            case CLIENT_BAT_LOW:
+                message += "<p>Client battery status: low</p>";
+                break;
+            case CLIENT_BAT_CRITICAL:
+                message += "<p>Client battery status: critical</p>";
+                break;
+            default:
+                message += "<p>Client battery status: undefined</p>";
+                break;
         }
-        message += "<p>Client battery voltage:";
+        
+        message += "<p>Client battery voltage: ";
         message += clientBateryVoltage;
         message += "</p>";
 
-        message += "<p>Client WIFI strength:";
+        message += "<p>Client WIFI strength: ";
         message += rssi;
         message += "</p>";
         
@@ -122,13 +153,6 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
         #endif
 
         server.send(200, "text/html", message);
-        
-        //to display:
-        // Version of server and version of client
-        // client 
-        // my IP expected client IP
-      
-        // sending alive messages every x Sek
     }
 
     // requests that are different from root
@@ -366,7 +390,7 @@ void loop(){
   #endif
     
   // WLAN client got lost
-  if ((WiFi.softAPgetStationNum() < 1)||(wlan_complete == false)){
+  if ((WiFi.softAPgetStationNum() < 1)||(wlan_complete == false)){ //############################### das passt nicht mehr richtig
     wlan_complete = false;
     #ifdef DEBUG
       Serial.printf("loop(): Currently %d stations are connected and wlan_complete is %d\n", WiFi.softAPgetStationNum(), wlan_complete);
@@ -392,10 +416,13 @@ void loop(){
           packetBuffer[len] = '\0';
 
         //received client sensor high command
-        if (!strcmp (packetBuffer, CLIENT_TOUCH_HIGH_MSG)){
-          digitalWrite(TOUCH_OUT, LOW);
+        if (!strncmp (packetBuffer, CLIENT_TOUCH_HIGH_MSG, strlen(CLIENT_TOUCH_HIGH_MSG))){
+          digitalWrite(TOUCH_OUT, LOW);                                              // indicate current touch state by LED
+          char *highMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_HIGH_MSG);        // cut/decode additional information out of the client message
+          if (!strncmp (highMsgAttach, "1", strlen("1")))
+            msg_lost = true;
           #ifdef DEBUG
-            Serial.printf("loop(): Client touch is high. Sending back the status\n");
+            Serial.printf("loop(): Client touch is high. Sending back the status. Attachment is %s\n", highMsgAttach);
           #endif
             Udp.beginPacket(clientIpAddr, clientUdpPort);
             Udp.write(CLIENT_TOUCH_HIGH_MSG);             // send back client high messages to client for response/feedback
@@ -403,13 +430,16 @@ void loop(){
         }
 
         //received client sensor low command
-        if (!strcmp (packetBuffer, CLIENT_TOUCH_LOW_MSG)){
+        if (!strncmp (packetBuffer, CLIENT_TOUCH_LOW_MSG, strlen(CLIENT_TOUCH_LOW_MSG))){
             digitalWrite(TOUCH_OUT, HIGH);
+            char *lowMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_LOW_MSG);        // cut/decode additional information out of the client message
+            if (!strncmp (lowMsgAttach, "1", strlen("1")))
+              msg_lost = true;
             #ifdef DEBUG
-                Serial.printf("loop(): Client touch is low.  Sending back the status\n");
+                Serial.printf("loop(): Client touch is low. Sending back the status. Attachment is %s\n", lowMsgAttach);
             #endif
             Udp.beginPacket(clientIpAddr, clientUdpPort);
-            Udp.write(CLIENT_TOUCH_LOW_MSG);          // send back client low messages to client for response/feedback
+            Udp.write(CLIENT_TOUCH_LOW_MSG);                                        // send back client low messages to client for response/feedback
             Udp.endPacket();
         }
 
