@@ -30,8 +30,9 @@ namespace CncSensor{
   const char*        SERVER_REPLY_MSG       = "reply";                  // UDP message from server to client to reply to hello msg
   const char*        SERVER_ALIVE_MSG       = "alive";                  // UDP message from server to show server is alive
   const int          CLIENT_ALIVE_CNT_MAX   = 2;                        // maximum client alive counter value
-  const long         WIFI_RSSI_REPORT_LEVEL = -65;                      // RSSI level, WLAN signal strength e.g. -40 is better -70 is worse (best was -44)
+  const long         WIFI_RSSI_REPORT_LEVEL = -80;                      // RSSI level, WLAN signal strength e.g. -40 is better -70 is worse (best was -44)
   const int          SERVER_TICKS_ARRAY_SIZE= 10;                       // Array Size of measured ticks
+  const float        NANOSEC_PER_TICK       = 12.5;                     // number of nanosecond per measured tick in CCOUNT register
   //client consts
   const char*        CLIENT_HELLO_MSG       = "hello";                  // UDP message from client to server to say hello
   const char*        CLIENT_REPLY_MSG       = "reply";                  // UDP message from client to server to reply to hello msg

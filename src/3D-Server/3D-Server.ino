@@ -34,9 +34,9 @@ int       rssi;
 char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
 
 #ifdef CYCLETIME
-  uint32  ticks;                                             // ticks from client performance measurement
-  int  ticksArray[SERVER_TICKS_ARRAY_SIZE]={0};         // array of ticks from client performance measurement
-  char ticksString[20*SERVER_TICKS_ARRAY_SIZE];           // string of array tick 
+  uint32  ticks;                                            // ticks from client performance measurement
+  int  ticksArray[SERVER_TICKS_ARRAY_SIZE]={0};             // array of ticks from client performance measurement
+  char ticksString[50*SERVER_TICKS_ARRAY_SIZE];             // string of array tick 
   int ticks_pointer = 0; 
 
   static inline void setNewTicks(uint32 ticks){
@@ -54,22 +54,27 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
   static inline char* getAllTicks(){
     int i;
     float average = 0;
-    char dstring[10];
+    char dstring[50];
 
     strcpy(ticksString, "<p>Client Ticks measurement:</p>");
     for (i= 0; i <= SERVER_TICKS_ARRAY_SIZE-1; i++){
       average = average + (float) ticksArray[i];                  // calculate average
-      itoa(ticksArray[i], dstring, 10);                   // convert ticks integer to char/string
+      //float dummy = ticksArray[i] * NANOSEC_PER_TICK;
+      //itoa(ticksArray[i], dstring, 10);                   // convert ticks integer to char/string
+      // ####################### hier könnte noch ein Fehler sein #####################################
+      sprintf(dstring, "%d: %d, %.2fms", i, ticksArray[i], ((float)ticksArray[i] * NANOSEC_PER_TICK / 1000000)); 
       strcat(ticksString, "<p>");                         // concatenate message string with converted integer string
       strcat(ticksString, dstring);                       // concatenate message string with converted integer string
       strcat(ticksString, "</p>");                        // add new line and tab
     }
-    strcat(ticksString, "\n<p>Average ticks:");
-
+    
+    // ############################### falsche ergebnisse bei weniger als 10 einträgen
+    strcat(ticksString, "\n<p>Average ticks/ms:");
     average = average / SERVER_TICKS_ARRAY_SIZE;          // calculate final average of the ticks measurements
-    sprintf(dstring, "%.2f", average); 
+    sprintf(dstring, "%.2f, %.2fms", average, (average * NANOSEC_PER_TICK / 1000000)); 
     strcat(ticksString, dstring);
     strcat(ticksString, "</p>");
+    
     #ifdef DEBUG
       Serial.printf("getAllTicks(): %s\n", ticksString);
     #endif
@@ -84,22 +89,19 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     void handleRoot() {
         //server.send(200, "text/html", "<h1>You are connected</h1>");
         String message = "<h1>Webserver 3D Touch Probe by Heiko Kalte (h.kalte@gmx.de)</h1>";
-        #ifdef CYCLETIME
-          message += getAllTicks();
-        #endif
         // number of currently connected clients (usually 2, the sensor and a webbrowser)
         message += "<p>Number of connected clients:";
         message += WiFi.softAPgetStationNum();
         message += "</p>";
         #ifdef DEBUG
-          message += "<p>DEBUG: yes</p>";
+          message += "<p>Server DEBUG: yes</p>";
         #else
-          message += "<p>DEBUG: no</p>";
+          message += "<p>Server DEBUG: no</p>";
         #endif
         #ifdef CYCLETIME
-          message += "<p>CYCLETIME: yes</p>";
+          message += "<p>Server CYCLETIME: yes</p>";
         #else
-          message += "<p>CYCLETIME: no</p>";
+          message += "<p>Server CYCLETIME: no</p>";
         #endif
 
         if (client_alive_counter < CLIENT_ALIVE_CNT_MAX){
@@ -114,6 +116,10 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
         message += "<p>Client WIFI strength:";
         message += rssi;
         message += "</p>";
+        
+        #ifdef CYCLETIME
+          message += getAllTicks();
+        #endif
 
         server.send(200, "text/html", message);
         
@@ -206,6 +212,7 @@ void ICACHE_RAM_ATTR serviceIsr(){                        // timer interrupt for
   doService();
 }
 
+
 void wlanInit(){
   #ifdef DEBUG
     Serial.printf("\n\nwlanInit(): Soft-AP server IP: ");
@@ -227,7 +234,8 @@ void wlanInit(){
     //digitalWrite(WLAN_LED, LOW);                        // switch on WLAN connection LED
     delay(SLOW_BLINK); 
     yield();
-  }
+  } //waiting for clients to connect either 3D touch probe client or a webbrowser if webserver is enabled
+
   #ifdef DEBUG
     Serial.println("Ready");
     Serial.printf("wlanInit(): Clients connected: %d\n", WiFi.softAPgetStationNum());
@@ -284,12 +292,11 @@ void wlanInit(){
       delay(FAST_BLINK);
       yield(); 
     } //if (packetSize)
-    /*  ########################### damit der Webserver auch schon funktioniert, wenn der Client nicht verbunden ist
+
     #ifdef WEBSERVER
     //handle client access if webserver is enabled
-      server.handleClient();
+      server.handleClient();                              // need to be called even before loop(), to allow webbrowser to connect even if the 3D touch client is not connected
     #endif
-    */
   } //while(!wlan_complete)
 }//void wlanInit()
 
@@ -329,6 +336,16 @@ void setup(){
     #ifdef DEBUG
       Serial.println("Ready");
     #endif
+
+    #ifdef WEBSERVER
+      server.on("/", handleRoot);
+      server.onNotFound(handleNotFound);                  // When a client requests an unknown URI (i.e. something other than "/"), call function "handleNotFound"
+      server.begin();
+      #ifdef DEBUG
+        Serial.println("setup(): HTTP server started");
+      #endif
+    #endif
+
     wlanInit();
   }else{
     #ifdef DEBUG
@@ -336,12 +353,6 @@ void setup(){
     #endif
     digitalWrite(ERROR_OUT, LOW);                         //switch on error output
   } // end if(result == true)
-  #ifdef WEBSERVER
-      server.on("/", handleRoot);
-      server.onNotFound(handleNotFound);                  // When a client requests an unknown URI (i.e. something other than "/"), call function "handleNotFound"
-      server.begin();
-      Serial.println("setup(): HTTP server started");
-  #endif
 } //end setup() 
 
 
