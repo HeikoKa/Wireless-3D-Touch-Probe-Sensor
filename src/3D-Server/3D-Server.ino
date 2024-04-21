@@ -35,16 +35,16 @@ int       rssi;
 char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
 
 #ifdef CYCLETIME
-  uint32  ticks;                                            // ticks from client performance measurement
+  uint32  ticks;                                              // ticks from client performance measurement
   int    ticksArray[SERVER_TICKS_ARRAY_SIZE]={0};             // array of ticks from client performance measurement
   char   ticksString[50*SERVER_TICKS_ARRAY_SIZE];             // string of array tick 
   int    ticks_pointer    = 0;
   uint32 totalNumberTicks = 0; 
 
   static inline void setNewTicks(uint32 ticks){
-    if (ticks_pointer >= 9)
+    if (ticks_pointer > 9)
       ticks_pointer = 0;
-    else
+
     ticksArray[ticks_pointer] = ticks;
     ticks_pointer++;
     totalNumberTicks++;
