@@ -22,7 +22,7 @@ An in-depth paragraph about your project and overview of use.
 
 ## Content of the repository
 * C/C++ code for ESP8266 client and server
-* 3D Fusion 360 model of the 3d touch sensor
+* 3D Fusion 360 model of the 3d touch sensor (not yet)
 * Schematic of the electronics of both ESP8266 boards (not yet)
 * Eding CNC macro for inner/outer center finding (not yet)
 * Picture of the hardware and picture during build
