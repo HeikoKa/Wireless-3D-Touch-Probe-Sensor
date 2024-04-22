@@ -4,7 +4,8 @@
 An in-depth paragraph about your project and overview of use.
 
 ## Features
-* client (3D touch probe) and server (base station) code 
+* X, Y and Z detection
+* Client (3D touch probe) and server (base station) code 
 * Wireless communication based on WIFI UDP, especially suitable for automatic toolchanger
 * Many parameters (see header file)
 * Debug mode for detailed serial monitor print outs
