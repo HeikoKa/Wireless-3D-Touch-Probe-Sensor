@@ -5,19 +5,19 @@ An in-depth paragraph about your project and overview of use.
 
 ## Features
 * client (3D touch probe) and server (base station) code 
-* based on UDP communication
-* many parameters (see header file)
-* debug mode for detailed serial monitor print outs
-* optional webserver
-* optional round trip delay measurement
-* lost UDP message detection
-* battery voltage monitoring
+* Wireless communication based on WIFI UDP, especially suitable for automatic toolchanger
+* Many parameters (see header file)
+* Debug mode for detailed serial monitor print outs
+* Optional webserver
+* Optional round trip delay measurement
+* Lost UDP message detection
+* Battery voltage monitoring
 * WLAN signal strength monitoring
-* client and server alive monitoring
-* wake up 3D touch client by touching the sensor by hand or by CNC maschine
-* send client asleep feature to save battery life
-* easy recharging of the client battery by magnetic USB cable
-* many more
+* Client and Server alive monitoring
+* Wake up 3D touch client by touching the sensor by hand or automatically by CNC maschine
+* Send client asleep feature to save battery life
+* Easy recharging of the client battery by magnetic USB cable
+* Many more
 
 ## Content of the repository
 * C/C++ code for ESP8266 client and server
