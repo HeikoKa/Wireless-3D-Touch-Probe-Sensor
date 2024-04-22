@@ -4,24 +4,25 @@
 An in-depth paragraph about your project and overview of use.
 
 ## Features
-* client (3D touch probe) and server (base station) code 
-* based on UDP communication
-* many parameters (see header file)
-* debug mode for detailed serial monitor print outs
-* optional webserver
-* optional round trip delay measurement
-* lost UDP message detection
-* battery voltage monitoring
+* X, Y and Z detection
+* Client (3D touch probe) and server (base station) code 
+* Wireless communication based on WIFI UDP, especially suitable for automatic toolchanger
+* Many parameters (see header file)
+* Debug mode for detailed serial monitor print outs
+* Optional webserver
+* Optional round trip delay measurement
+* Lost UDP message detection
+* Battery voltage monitoring
 * WLAN signal strength monitoring
-* client and server alive monitoring
-* wake up 3D touch client by touching the sensor by hand or by CNC maschine
-* send client asleep feature to save battery life
-* easy recharging of the client battery by magnetic USB cable
-* many more
+* Client and Server alive monitoring
+* Wake up 3D touch client by touching the sensor by hand or automatically by CNC maschine
+* Send client asleep feature to save battery life
+* Easy recharging of the client battery by magnetic USB cable
+* Many more
 
 ## Content of the repository
 * C/C++ code for ESP8266 client and server
-* 3D Fusion 360 model of the 3d touch sensor
+* 3D Fusion 360 model of the 3d touch sensor (not yet)
 * Schematic of the electronics of both ESP8266 boards (not yet)
 * Eding CNC macro for inner/outer center finding (not yet)
 * Picture of the hardware and picture during build
@@ -35,12 +36,12 @@ An in-depth paragraph about your project and overview of use.
 * adjust the include file path in the server and client file (because Arduino IDE does not support relative include paths)
 * enable DEBUG mode in the header file for the first runs to get as many infos as possible
 * compile and download files for client and server
+* watch the serial prints of the Client and Server to understand what ist happening
 
 
-### Installing
+### Mechanical Hardware Build
 
-* How/where to download your program
-* Any modifications needed to be made to files/folders
+* No lathe required, CNC maschine and welding ist necessary
 
 ### Executing program
 
