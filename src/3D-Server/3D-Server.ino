@@ -92,7 +92,6 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
 #ifdef WEBSERVER
       //to display:
         // Version of server and version of client
-        // my IP expected client IP
         // sending alive messages every x Sek
 
     ESP8266WebServer server(80);
@@ -101,6 +100,16 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     void handleRoot() {
         String message = "<h1>Webserver 3D Touch Probe</h1>";
         message += "<h3>by Heiko Kalte (h.kalte@gmx.de)</h3>";
+        message += "<p>Server IP: ";
+        message += serverIpAddr.toString().c_str();
+        message += ", Port: ";
+        message += serverUdpPort;
+        message += "</p>";
+        message += "<p>Client IP: ";
+        message += clientIpAddr.toString().c_str();
+        message += ", Port: ";
+        message += clientUdpPort;
+        message += "</p>";
         message += "<p>Number of connected clients: ";
         message += WiFi.softAPgetStationNum();
         message += "</p>";
@@ -114,7 +123,7 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
         #else
           message += "<p>Server CYCLETIME: no</p>";
         #endif
-
+        //############################################ client alive is that correct
         if (client_alive_counter < CLIENT_ALIVE_CNT_MAX)
           message += "<p>Client alive: yes</p>";
         else

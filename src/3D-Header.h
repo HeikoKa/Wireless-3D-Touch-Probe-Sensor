@@ -64,7 +64,7 @@ namespace CncSensor{
   unsigned int      clientUdpPort           = 4210;                     // client port
 
   //Battery consts
-  const float       BAT_LOW_VOLT            = 2.9;                      // battery voltage below this, is indicated as low battery state
+  const float       BAT_LOW_VOLT            = 2.9;                      // ######3.48V müsste schon wenig sein ###### battery voltage below this, is indicated as low battery state
   const float       BAT_CRIT_VOLT           = 2.7;                      // battery voltage below this, is indicated as critical battery state
   const char*       CLIENT_BAT_OK_MSG       = "bat ok";                 // UDP message for battery voltage is ok
   const int         CLIENT_BAT_OK           = 1;                        // internal coding for battery is ok
