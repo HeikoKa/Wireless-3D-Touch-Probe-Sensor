@@ -36,12 +36,12 @@ An in-depth paragraph about your project and overview of use.
 * adjust the include file path in the server and client file (because Arduino IDE does not support relative include paths)
 * enable DEBUG mode in the header file for the first runs to get as many infos as possible
 * compile and download files for client and server
+* watch the serial prints of the Client and Server to understand what ist happening
 
 
-### Installing
+### Mechanical Hardware Build
 
-* How/where to download your program
-* Any modifications needed to be made to files/folders
+* No lathe required, CNC maschine and welding ist necessary
 
 ### Executing program
 
