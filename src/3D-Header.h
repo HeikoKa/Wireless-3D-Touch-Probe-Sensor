@@ -41,14 +41,14 @@ namespace CncSensor{
   const char*        CLIENT_ALIVE_MSG       = "alive";                  // UDP message from client alive
   const char*        CLIENT_RSSI_MSG        = "rssi";                   // UDP message from client with rssi (WLAN signal strength)
   const char*        CLIENT_CYCLE_MSG       = "CYC:";                   // UDP message from client to server to transmit the last measured cycle time ticks
-  const int          SERVER_ALIVE_CNT_MAX   = 1;                        // [24.03.24] reduced von 5 to 1, maximum server alive counter value, try to reconnect
-  const int          SERVER_ALIVE_CNT_DEAD  = 2;                        // [24.03.24] reduced von 5 to 2, maximum server alive counter value, server seems to be dead
+  const int          SERVER_ALIVE_CNT_MAX   = 1;                        // maximum server alive counter value, try to reconnect
+  const int          SERVER_ALIVE_CNT_DEAD  = 2;                        // maximum server alive counter value, server seems to be dead
   const int          SERVER_AQUN_CNT_MAX    = 2000;                     // number of loop cycles before the server must acknowledge the high/low messages
   const int          TOUCH_PIN_DEBOUNCE     = 700;                      // debounce time in µs for touch input pin
 
 
   //client and server consts
-  const uint32_t     SERVICE_INTERVALL      = 4000000;                  // [24.03.24]changed 8388607 to 4000000 from timer ticks for service interrupt (max 8388607)
+  const uint32_t     SERVICE_INTERVALL      = 4000000;                  // timer ticks for service interrupt (max 8388607)
   const int          UDP_PACKET_MAX_SIZE    = 16;                       // UDP buffer size
   const uint8_t      SLOW_BLINK             = 1000;                     // delay for slow blinking LED
   const uint8_t      FAST_BLINK             = 500;                      // delay for fast blinking LED
