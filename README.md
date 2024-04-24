@@ -47,25 +47,10 @@ There are a lot of examples where people build a DIY 3D Touch Probe, that is bas
 
 * No lathe required, CNC maschine and welding ist necessary
 
-### Executing program
-
-* How to run the program
-* Step-by-step bullets
-```
-code blocks for commands
-```
-
-## Help
-
-Any advise for common problems or issues.
-
 
 ## Authors
 
-Contributors names and contact info
-
-ex. Dominique Pizzie  
-ex. [@DomPizzie](https://twitter.com/dompizzie)
+Heiko Kalte, h.kalte@gmx.de
 
 ## Version History
 
