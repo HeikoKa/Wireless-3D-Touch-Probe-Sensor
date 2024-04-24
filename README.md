@@ -5,7 +5,7 @@ For CNC machines like VMC (Vertical Machining Center) a regular task is to find 
 
 There are a lot of examples where people build a DIY 3D Touch Probe, that is basically nothing more than a switch that is connects by a wire to the CNC controller. For machines that make use of an ATC (Automatic Tool Changer) like a carousel this is not suitable, because of the wire from the probe to the CNC controller. In order to make use of a completely automated probing a wireless conntection is required. In this project I share my results for a WLAN UDP based 3D Touch Probe consisting of the Probe and a Basestation. While the Probe is working by a recharable battery and a DSP8266 microcontroller, the Basestation also hosts a DSP8266 microcontroller and is powered by a 5V power supply and is connected to the CNC controller to hand over e.g. the current switch state of the 3D Touch Probe. Although the electronics suits best for the provided mechanics, it is basically possible to use the code and the electronics for any 3D-Touch Probe.
 
-![Test Image 3](/media/pics/IMG_20240214_185301.jpg)
+![3D_Touch_Probe.jpg](/media/pics/3D_Touch_Probe.jpg)
 
 ## Features
 * X, Y and Z detection
