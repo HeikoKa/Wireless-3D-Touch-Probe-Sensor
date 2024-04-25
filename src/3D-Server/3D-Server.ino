@@ -90,10 +90,7 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
 #endif //CYCLETIME
 
 #ifdef WEBSERVER
-      //to display:
-        // Version of server and version of client
-        // sending alive messages every x Sek
-
+      
     ESP8266WebServer server(80);
     
     // root web page of the server
@@ -123,7 +120,7 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
         #else
           message += "<p>Server CYCLETIME: no</p>";
         #endif
-        //############################################ client alive is that correct
+     
         if (client_alive_counter < CLIENT_ALIVE_CNT_MAX)
           message += "<p>Client alive: yes</p>";
         else
@@ -307,8 +304,6 @@ void wlanInit(){
         Udp.endPacket();        
       }
 
-      //clientIpAddr  = Udp.remoteIP();                     //######check ob dies die richtige ist?
-      //clientUdpPort = Udp.remotePort();
       wlan_complete = true;                               // WLAN connection is complete, stop listening for further incoming UPD packages
       digitalWrite(WLAN_LED, LOW);                        // switch on WLAN connection LED to indicate sucessfull connection
       #ifdef DEBUG
@@ -399,7 +394,8 @@ void loop(){
   #endif
     
   // WLAN client got lost
-  if ((WiFi.softAPgetStationNum() < 1)||(wlan_complete == false)){ //############################### das passt nicht mehr richtig
+  // better check would be compare the client IP address to the expected client IP address, other webbrowsers are clients as well
+  if ((WiFi.softAPgetStationNum() < 1)||(wlan_complete == false)){
     wlan_complete = false;
     #ifdef DEBUG
       Serial.printf("loop(): Currently %d stations are connected and wlan_complete is %d\n", WiFi.softAPgetStationNum(), wlan_complete);
