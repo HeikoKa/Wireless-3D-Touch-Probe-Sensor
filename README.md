@@ -45,7 +45,7 @@ The following picture shows the 3D-Touch-Probe in a ATC tool holder BT30. The ro
 * watch the serial prints of the Client and Server to understand what ist happening
 
 
-### Mechanical Hardware Build
+## Mechanical Hardware Build
 
 * No lathe required, CNC maschine and welding ist necessary
 
