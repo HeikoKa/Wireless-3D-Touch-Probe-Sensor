@@ -3,7 +3,7 @@
 
 For CNC machines like VMC (Vertical Machining Center) a regular task is to find the center or an edge of a workpiece as a reference for the following machining. However, this can be extremely annoying to do manually by moving the X, Y and Z axis. Professional machinists use so call 3D Touch Probe or Edge Finder to do this automatically. For hobbyists and semi-professionals these Touch Probes are way too expensive. 
 
-There are a lot of examples where people build a DIY 3D Touch Probe, that is basically nothing more than a switch that is connects by a wire to the CNC controller. For machines that make use of an ATC (Automatic Tool Changer) like a carousel this is not suitable, because of the wire from the probe to the CNC controller. In order to make use of a completely automated probing a wireless conntection is required. In this project I share my results for a WLAN UDP based 3D Touch Probe consisting of the Probe and a Basestation. While the Probe is working by a recharable battery and a DSP8266 microcontroller, the Basestation also hosts a DSP8266 microcontroller and is powered by a 5V power supply and is connected to the CNC controller to hand over e.g. the current switch state of the 3D Touch Probe. Although the electronics suits best for the provided mechanics, it is basically possible to use the code and the electronics for any 3D-Touch Probe.
+There are a lot of examples where people build a DIY 3D Touch Probe, that is basically nothing more than a switch that is connects by a wire to the CNC controller. For machines that make use of an ATC (Automatic Tool Changer) like a carousel this is not suitable, because of the wire from the probe to the CNC controller. In order to make use of a completely automated probing a wireless connection is required. In this project I share my results for a WLAN UDP based 3D Touch Probe consisting of the Probe and a Basestation. While the Probe is working by a recharable battery and a D1 Mini Pro (DSP8266) microcontroller, the Basestation also hosts a DSP8266 microcontroller and is powered by a 5V power supply and is connected to the CNC controller to hand over e.g. the current switch state of the 3D Touch Probe. Although the electronics suits best for the provided mechanics, it is basically possible to use the code and the electronics for any 3D-Touch Probe.
 
 The following picture shows the 3D-Touch-Probe in a ATC tool holder BT30. The round connector is the magnetic charging connector for the internal battery. The transparent middle part is used to show serveral states by LEDs, e.g. power on, WLAN connected, touch probe closed/open, battery low, general error etc. For pictures of the basestation see the /media/pics/ folder.
 
@@ -36,7 +36,7 @@ The following picture shows the 3D-Touch-Probe in a ATC tool holder BT30. The ro
 * Bill of material (not yet)
 
 ## Getting Started
-* get two ESP8266 and two mirco USB cables (not just a power USB cable it must support the serial communication)
+* get two D1 Mini Pro (ESP8266) and two mirco USB cables (not just a power USB cable it must support the serial communication)
 * download and setup Arduine IDE for the ESP8266
 * download the repository (client, server und header file)
 * adjust the include file path in the server and client file (because Arduino IDE does not support relative include paths)
@@ -45,7 +45,7 @@ The following picture shows the 3D-Touch-Probe in a ATC tool holder BT30. The ro
 * watch the serial prints of the Client and Server to understand what ist happening
 
 
-### Mechanical Hardware Build
+## Mechanical Hardware Build
 
 * No lathe required, CNC maschine and welding ist necessary
 
@@ -58,6 +58,11 @@ Heiko Kalte, h.kalte@gmx.de
 
 * 0.1
     * Initial Release
+    * 
+## Donate
+If this project help you reduce time to develop, you can give me a cup of coffee :) 
+
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/donate?hosted_button_id=WHYVXK9DHQQHL)
 
 ## License
 
