@@ -58,7 +58,7 @@ Heiko Kalte, h.kalte@gmx.de
 
 * 0.1
     * Initial Release
-    * 
+      
 ## Donate
 If this project help you reduce time to develop, you can give me a cup of coffee :) 
 
