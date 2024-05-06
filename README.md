@@ -32,7 +32,7 @@ The following picture shows the 3D-Touch-Probe in a ATC tool holder BT30. The ro
 * Schematic of the electronics of both ESP8266 boards (not yet)
 * Eding CNC macro for inner/outer center finding (not yet)
 * Picture of the hardware and picture during build
-* Videos of the function (not yet)
+* Videos of the function
 * Bill of material (not yet)
 
 ## Getting Started
