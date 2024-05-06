@@ -48,6 +48,7 @@ The following picture shows the 3D-Touch-Probe in a ATC tool holder BT30. The ro
 ## Mechanical Hardware Build
 
 * No lathe required, CNC maschine and welding ist necessary
+* Lathe tools in a vise is required
 
 
 ## Authors
