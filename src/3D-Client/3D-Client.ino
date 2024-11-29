@@ -113,7 +113,7 @@ static inline void checkAliveCounter(void){
       server_alive_cnt  = 0;
       wlan_complete     = false;
       aliveCounterError = true;                           // set red LED to indicate error
-      digitalWrite(SLEEP_OUT, HIGH);                      // switch off external power
+      digitalWrite(SLEEP_OUT, LOW);                       // switch off external power
 
     } // end if SERVER_ALIVE_CNT_DEAD 
   } // end if SERVER_ALIVE_CNT_MAX
@@ -321,7 +321,7 @@ void setup(void) {
   digitalWrite(WLAN_LED,         HIGH);                   // switch off WLAN connection LED
   digitalWrite(CLIENT_ERROR_OUT, HIGH);                   // switch off error LED
   digitalWrite(TOUCH_LED,        HIGH);                   // switch off touch LED
-  digitalWrite(SLEEP_OUT,         LOW);                   // switch on output to prevent external sleep hardware to send cpu to sleep
+  digitalWrite(SLEEP_OUT,        HIGH);                   // switch on output to prevent external sleep hardware to send cpu to sleep
 
   // Init wlan communication with server
   wlanInit();
@@ -393,7 +393,7 @@ void loop(void){
       #ifdef DEBUG
         Serial.println("loop(): Detected sleep command\nGoing to deep sleep...");
       #endif
-      digitalWrite(SLEEP_OUT, HIGH);                 // switch off external power
+      digitalWrite(SLEEP_OUT, LOW);                 // switch off external power
     }
 
     // receiving alive message from server and resetting the alive counter
