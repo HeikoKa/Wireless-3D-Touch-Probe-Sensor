@@ -3,12 +3,14 @@
   *  @author Heiko Kalte  
   *  @date 20.04.2024 
   * 
-  *  @version 0.1
+  *  @version 0.2
   */
   // 0.1:   Time measurement for directive CYCLETIME
   //        Renamed Client BAT_LED to CLIENT_ERROR_OUT
   //        Reduced waiting times for "alive"
   //        New message CLIENT_CYCLE_MSG added 
+  // 0.2:   Changed function due to new sleep hardware (former deep sleep consumes to much power)
+
 
 #ifndef CNCSENSOR_H_
 #define CNCSENSOR_H_
@@ -87,6 +89,7 @@ namespace CncSensor{
   const uint8_t     CLIENT_ERROR_OUT        = 5;                        // (D1) LED to indicate error
   const uint8_t     TOUCH_LED               = 4;                        // (D2) LED to indicate a touch of the 3D sensor
   const uint8_t     TOUCH_IN                = 12;                       // (D6) digital input pin to listen
-  const uint8_t     PREVENT_RESET_OUT       = 14;                       // (D5) prevents reset by touch pin when client is alive
+  //const uint8_t     PREVENT_RESET_OUT       = 14;                       // (D5) prevents reset by touch pin when client is alive
+  const uint8_t     SLEEP_OUT       = 14;                               // (D5) controls external sleep hardware
 }
 #endif

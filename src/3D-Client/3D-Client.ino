@@ -3,9 +3,10 @@
   *  @author Heiko Kalte  
   *  @date 20.04.2024 
   * 
-  *  @version 0.1
+  *  @version 0.2
   */
   // 0.1:   initial version
+  // 0.2:   Changed function due to new sleep hardware (former deep sleep consumes to much power)
 
   //TODO
   
@@ -112,7 +113,8 @@ static inline void checkAliveCounter(void){
       server_alive_cnt  = 0;
       wlan_complete     = false;
       aliveCounterError = true;                           // set red LED to indicate error
-      ESP.deepSleep(0);                                   // go to deep sleep, reset pin to wake up
+      digitalWrite(SLEEP_OUT, HIGH);                      // switch off external power
+
     } // end if SERVER_ALIVE_CNT_DEAD 
   } // end if SERVER_ALIVE_CNT_MAX
 } //end checkAliveCounter()
@@ -304,7 +306,7 @@ void setup(void) {
   pinMode(WLAN_LED,          OUTPUT);                     // LED to show WLAN connection state
   pinMode(CLIENT_ERROR_OUT,  OUTPUT);                     // Error LED
   pinMode(TOUCH_LED,         OUTPUT);                     // Touch LED visual output
-  pinMode(PREVENT_RESET_OUT, OUTPUT);                     // prevent reset output
+  pinMode(SLEEP_OUT,         OUTPUT);                     // control external sleep hardware
   
   //initialize digital input pins and isr
   pinMode(TOUCH_IN, INPUT_PULLUP);                        // set DIO to input with pullup
@@ -319,7 +321,7 @@ void setup(void) {
   digitalWrite(WLAN_LED,         HIGH);                   // switch off WLAN connection LED
   digitalWrite(CLIENT_ERROR_OUT, HIGH);                   // switch off error LED
   digitalWrite(TOUCH_LED,        HIGH);                   // switch off touch LED
-  digitalWrite(PREVENT_RESET_OUT, LOW);                   // switch on output to prevent reset by touch
+  digitalWrite(SLEEP_OUT,         LOW);                   // switch on output to prevent external sleep hardware to send cpu to sleep
 
   // Init wlan communication with server
   wlanInit();
@@ -391,7 +393,7 @@ void loop(void){
       #ifdef DEBUG
         Serial.println("loop(): Detected sleep command\nGoing to deep sleep...");
       #endif
-      ESP.deepSleep(0); // goto deep sleep, awake by external reset pin
+      digitalWrite(SLEEP_OUT, HIGH);                 // switch off external power
     }
 
     // receiving alive message from server and resetting the alive counter
