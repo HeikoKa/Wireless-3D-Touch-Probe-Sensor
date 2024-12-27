@@ -11,8 +11,6 @@
   // 0.4:   refactoring and RBG LED support
 
   //TODO
-  // LED aus und einblenden bei start und Ende
-  // WLAN LED Blinken
   // man könnte die verschiedenen Errors batteryError, rssiError, touchStateError, aliveCounterError auch durch unterschiedliche Farben oder Blinken anzeigen
   
 
@@ -47,6 +45,7 @@ struct statesType
 {
     bool    touchState               = LOW;                   // current touch sensor state
     bool    wlanComplete             = false;                 // global variable to indicate if wlan connection is established completely
+    bool    wlanCompleteBlink        = true;                  // blink wlan LED if enlighted
     bool    batteryError             = false;                 // error with the battery
     bool    rssiError                = false;                 // error with the WLAN rssi
     bool    touchStateError          = false;                 // error with the touch state
@@ -90,7 +89,7 @@ statesType states;
       Udp.endPacket();
       high_command_acknowledge = false;                   // set acknowledge to false until the server responses with the same command
       states.touchState        = HIGH;                    // remember the current state
-      controlLed();                                       // set touch LED
+      controlLed(CLIENT_RGB_BRIGHTNESS);                  // set touch LED
       #ifdef CYCLETIME
         bTimeHigh = asm_ccount();                         // take begin time for client to server to client cycle time measurement
       #endif
@@ -114,7 +113,7 @@ static inline void doSensorLow(void){
     Udp.endPacket();
     low_command_acknowledge = false;                    // set acknowledge to false until the server responses with the same command
     states.touchState       = LOW;                      // remember the current state
-    controlLed();                                       // set touch LED
+    controlLed(CLIENT_RGB_BRIGHTNESS);                  // set touch LED
     #ifdef CYCLETIME
       bTimeLow = asm_ccount();                          // take begin time for client to server to client cycle time measurement
     #endif
@@ -256,12 +255,13 @@ static inline void doService(void) {
   checkAliveCounter();                                    // check server alive counter in service
   sendAliveMsg();                                         // send client alive in service
   checkWlanStatus();                                      // check WLAN status and signal strength
-  controlLed();                                           // set the red error LED
+  controlLed(CLIENT_RGB_BRIGHTNESS);                      // set the red error LED
   #ifdef DEBUG
     Serial.printf("doService(): end\n\n");
   #endif
 }
 
+// ISR attribute for ESP32 "IRAM_ATTR"
 void ICACHE_RAM_ATTR serviceIsr(void){                    // timer interrupt service routine
   doService();
 }
@@ -273,29 +273,16 @@ void wlanInit(void){
     Serial.println("\n\n");
     Serial.printf("wlanInit(): Connecting to %s ", SSID);
   #endif
-  
+  states.wlanCompleteBlink = true;                        // switch on blinking
   WiFi.begin(SSID, password);                             // connect to WLAN 
   while (WiFi.status() != WL_CONNECTED){                  // stay in this loop until a WLAN connection could be established
-    /*#ifdef CLIENT_ESP32
-      neopixelWrite(CLIENT_WLAN_LED,0,0,CLIENT_RGB_BRIGHTNESS); // Blue
-      delay(SLOW_BLINK);
-      neopixelWrite(CLIENT_WLAN_LED,0,0,0); // Off / black
-      delay(SLOW_BLINK);
-    #else
-      digitalWrite(CLIENT_WLAN_LED, HIGH);                         // blink WLAN LED slowly to indicate connection try
-      delay(SLOW_BLINK);
-      digitalWrite(CLIENT_WLAN_LED, LOW);                          // blink WLAN LED slowly to indicate connection try
-      delay(SLOW_BLINK);
-    #endif
-    yield();*/
-    controlLed();
+    controlLed(CLIENT_RGB_BRIGHTNESS);                    // blink WLAN LED until WLAN is established 
     #ifdef DEBUG
       Serial.print(".");
     #endif
-  }//end while
+  }//end while WiFi.status
 
   Udp.begin(clientUdpPort);                               // now listening for a server to send UDP messages
-
   #ifdef DEBUG
     Serial.println(" connected to WLAN network");
   #endif
@@ -334,7 +321,7 @@ void wlanInit(void){
           Udp.endPacket();
         }
         states.wlanComplete = true;                             // WLAN connection is complete
-        controlLed();                     // switch off WLAN LED to indicate that WLAN connection is complete (no more blinking)
+        controlLed(CLIENT_RGB_BRIGHTNESS);                      // switch off WLAN LED to indicate that WLAN connection is complete (no more blinking)
         #ifdef DEBUG
           Serial.print("wlanInit(): WLAN is complete\n");
         #endif 
@@ -354,49 +341,56 @@ void wlanInit(void){
       digitalWrite(CLIENT_WLAN_LED, LOW);                        // toggle WLAN LED quickly to indicate connection try
       delay(FAST_BLINK);
       yield();*/
-      controlLed();
+      controlLed(CLIENT_RGB_BRIGHTNESS);
     } //end if (packetSize)
   }//end while(!states.wlanComplete)
 }//end void WlanInit()
 
 
-void controlLed(void) {
+void controlLed(uint8_t brightness) {
   #ifdef CLIENT_RGB_LED   // one RGB LED for all states
     if(states.touchState){  // current touch state has LED Priority over all other LEDs
-      pixels.setPixelColor(0, pixels.Color(0, 0, CLIENT_RGB_BRIGHTNESS)); // Blue rgb(0,0,255)
+      pixels.setPixelColor(0, pixels.Color(0, 0, brightness)); // Blue rgb(0,0,255)
     }else{
       if (!states.wlanComplete){
-        pixels.setPixelColor(0, pixels.Color(CLIENT_RGB_BRIGHTNESS, CLIENT_RGB_BRIGHTNESS*0.65,0)); // Orange rgb(255,165,0); rgb(100%,65%,0%)
+        pixels.setPixelColor(0, pixels.Color(brightness, static_cast<float>(brightness)*0.65, 0)); // Orange rgb(255,165,0); rgb(100%,65%,0%)
+        if (states.wlanCompleteBlink){
+          pixels.show();   // Send the updated pixel colors to the hardware.
+          delay(SLOW_BLINK);
+          pixels.setPixelColor(0, pixels.Color(0, 0, 0)); // switch off
+          pixels.show();   // Send the updated pixel colors to the hardware.
+          delay(SLOW_BLINK);
+        }
       }else{
         if (states.batteryError || states.rssiError || states.touchStateError || states.aliveCounterError){
-          pixels.setPixelColor(0, pixels.Color(CLIENT_RGB_BRIGHTNESS, 0, 0)); // red rgb(255,0,0)
+          pixels.setPixelColor(0, pixels.Color(brightness, 0, 0)); // red rgb(255,0,0)
         }else{
           if (digitalRead(CLIENT_CHARGE_IN) == LOW){
-            pixels.setPixelColor(0, pixels.Color(0, CLIENT_RGB_BRIGHTNESS, 0)); // green rgb(0,255,0)
+            pixels.setPixelColor(0, pixels.Color(0, brightness, 0)); // green rgb(0,255,0)
           }else{ //if none of the above applys, make LED white to indicate, that the sensor is on power
-            pixels.setPixelColor(0, pixels.Color(CLIENT_RGB_BRIGHTNESS, CLIENT_RGB_BRIGHTNESS, CLIENT_RGB_BRIGHTNESS)); // white rgb(255,255,255)
+            pixels.setPixelColor(0, pixels.Color(brightness, brightness, brightness)); // white rgb(255,255,255)
           } //end if battery charging
         } //end if error
       } //end if states.wlanComplete
     } //end if states.touchState
     pixels.show();   // Send the updated pixel colors to the hardware.
   #else // dedicated LEDs for the states
-    digitalWrite(CLIENT_POWER_LED, LOW);                   // switch on power LED
+    digitalWrite(CLIENT_POWER_LED, LOW);                     // switch on power LED
 
     if (states.wlanComplete)
       digitalWrite(CLIENT_WLAN_LED, HIGH);                   // switch off WLAN connection LED
     else
-      digitalWrite(CLIENT_WLAN_LED, LOW);                   // switch off WLAN connection LED
+      digitalWrite(CLIENT_WLAN_LED, LOW);                    // switch off WLAN connection LED
    
-    if (states.touchState ==HIGH)
+    if (states.touchState == HIGH)
       digitalWrite(CLIENT_TOUCH_LED, LOW);                   // switch off touch LED
     else
-      digitalWrite(CLIENT_TOUCH_LED, HIGH);                   // switch off touch LED
+      digitalWrite(CLIENT_TOUCH_LED, HIGH);                  // switch off touch LED
 
     if (states.batteryError || states.rssiError || states.touchStateError || states.aliveCounterError)
-      digitalWrite(CLIENT_ERROR_OUT, LOW);                // enlight red LED if any error has occurred
+      digitalWrite(CLIENT_ERROR_OUT, LOW);                   // enlight red LED if any error has occurred
     else
-      digitalWrite(CLIENT_ERROR_OUT, HIGH);               // switch off light if no error is reported
+      digitalWrite(CLIENT_ERROR_OUT, HIGH);                  // switch off light if no error is reported
   #endif
 } //end controlRgbLed
 
@@ -408,27 +402,27 @@ static inline void initIo(void) {
   #endif
 
   #ifdef CLIENT_RGB_LED
-    pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
-
-  #else
-    //initialize digital output pins
-    pinMode(CLIENT_POWER_LED,         OUTPUT);              // LED to show power is on
-    pinMode(CLIENT_WLAN_LED,          OUTPUT);              // LED to show WLAN connection state
-    pinMode(CLIENT_ERROR_OUT,         OUTPUT);              // Error LED
-    pinMode(CLIENT_TOUCH_LED,         OUTPUT);              // Touch LED visual output
+    pixels.begin();                               // initialize NeoPixel RBG LED
+  #else                                           // initialize digital output pins for simple LEDs
+    pinMode(CLIENT_POWER_LED,  OUTPUT);           // LED to show power is on
+    pinMode(CLIENT_WLAN_LED,   OUTPUT);           // LED to show WLAN connection state
+    pinMode(CLIENT_ERROR_OUT,  OUTPUT);           // Error LED
+    pinMode(CLIENT_TOUCH_LED,  OUTPUT);           // Touch LED visual output
   #endif
-  //initialize digital output pins
-  pinMode(CLIENT_SLEEP_OUT,         OUTPUT);              // control external sleep hardware
-  //initialize digital input pins and isr
-  pinMode(CLIENT_TOUCH_IN,  INPUT_PULLUP);                 // set DIO to input with pullup
-  pinMode(CLIENT_CHARGE_IN, INPUT_PULLUP);                 // set DIO to input with pullup
+  pinMode(CLIENT_SLEEP_OUT,    OUTPUT);           // control external sleep hardware
+  pinMode(CLIENT_TOUCH_IN,     INPUT_PULLUP);     // set DIO to input with pullup
+  pinMode(CLIENT_CHARGE_IN,    INPUT_PULLUP);     // set DIO to input with pullup
   
-  digitalWrite(CLIENT_SLEEP_OUT,  HIGH);                    // switch on output to prevent external sleep hardware to send cpu to sleep
-  controlLed();                                             // set all LEDs
+  digitalWrite(CLIENT_SLEEP_OUT,  HIGH);          // switch on output to prevent external sleep hardware to send cpu to sleep
+  controlLed(CLIENT_RGB_BRIGHTNESS);              // set all LEDs
 }
 
 static inline void goSleep(){
-  //###################### LED shutdown
+  // LED shutdown
+  for(int i = CLIENT_RGB_BRIGHTNESS; i > 0; i = i - 1){
+    controlLed(i);
+    delay(FAST_BLINK); 
+  }
   digitalWrite(CLIENT_SLEEP_OUT, LOW);                 // switch off external power
 }
 
@@ -458,7 +452,6 @@ void setup(void) {
 
 void loop(void){
 
-  //controlLed();  // ############################### muss das immer gesetzt werden
   //reconnect to server if connection got lost
    if (states.wlanComplete == false){
     #ifdef DEBUG
@@ -494,7 +487,7 @@ void loop(void){
         doSensorLow();                                    // server did not answer to low message from client, re-transmit
         ackCounterLow   = 0;                              // reset counter for re-transmitting low message
         states.touchStateError = true;                           // indicate error by red LED
-        controlLed();
+        controlLed(CLIENT_RGB_BRIGHTNESS);
      }
    }
 
@@ -507,7 +500,7 @@ void loop(void){
         doSensorHigh();                                   // server did not answer to low message from client, re-transmit
         ackCounterHigh  = 0;                              // reset counter for re-transmitting low message
         states.touchStateError = true;                           // indicate error by red LED
-        controlLed();
+        controlLed(CLIENT_RGB_BRIGHTNESS);
      }
    }
   

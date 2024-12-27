@@ -113,7 +113,6 @@ namespace CncSensor{
     const uint8_t     SERVER_WLAN_LED         = 21;                   // LED to inducate the current WLAN state
     const uint8_t     SERVER_TOUCH_OUT        = 1;                    // LED to indicate a touch of the 3D sense
     const uint8_t     SERVER_ERROR_OUT        = 2;                    // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
-
     const uint8_t     SERVER_SLEEP_IN         = 3;                    // Input pin for the CNC controller to indicate that the slave can go to sleep
     const uint8_t     SERVER_BAT_ALM_OUT      = 4;                    // server battery is low
     #else
