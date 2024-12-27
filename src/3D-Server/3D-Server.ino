@@ -3,26 +3,40 @@
   *  @author Heiko Kalte  
   *  @date 20.04.2024 
   * 
-  *  @version 0.1
+  *  @version 0.2
   */
-  //  0.1   initial version
+  //  0.1   initial version for ESP8266
+  //  0.2   added ESP32 support via #ifdef
 
 
+#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <ESP8266WiFi.h>
+#include <Adafruit_NeoPixel.h>
+//#include <WS2812FX.h>
+#ifdef SERVER_ESP32
+    #include <WiFi.h>
+  #else //ESP8266
+    #include <ESP8266WiFi.h>
+#endif
 #include <WiFiUdp.h>
 #include <Ticker.h>
-#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
+
 
 #ifdef WEBSERVER
-    #include <ESP8266WebServer.h>
+    #ifdef SERVER_ESP32
+      #include <WebServer.h>
+    #else //ESP8266
+      #include <ESP8266WebServer.h>
+    #endif
     #include <WiFiClient.h>
 #endif
 
 using namespace CncSensor;
 
 //TODOs
+// check ESP32 interrupt handling
+// are round trip tick measurement for ESP32 the same time?
 
 
 int       clientBatteryStatus        = CLIENT_BAT_OK;       // init with battery is ok
@@ -33,15 +47,18 @@ int       client_alive_counter       = 0;                   // client alive coun
 WiFiUDP   Udp;                                              // UDP object
 int       rssi;
 char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
+#ifdef SERVER_ESP32
+  hw_timer_t *serviceTimer = NULL;
+#endif
 
 #ifdef CYCLETIME
-  uint32  ticks;                                              // ticks from client performance measurement
-  int    ticksArray[SERVER_TICKS_ARRAY_SIZE]={0};             // array of ticks from client performance measurement
-  char   ticksString[50*SERVER_TICKS_ARRAY_SIZE];             // string of array tick 
-  int    ticks_pointer    = 0;
-  uint32 totalNumberTicks = 0; 
+  uint32_t  ticks;                                          // ticks from client performance measurement
+  int       ticksArray[SERVER_TICKS_ARRAY_SIZE]={0};        // array of ticks from client performance measurement
+  char      ticksString[50*SERVER_TICKS_ARRAY_SIZE];        // string of array tick 
+  int       ticks_pointer    = 0;
+  uint32_t  totalNumberTicks = 0;
 
-  static inline void setNewTicks(uint32 ticks){
+  static inline void setNewTicks(uint32_t ticks){
     if (ticks_pointer > 9)
       ticks_pointer = 0;
 
@@ -50,7 +67,7 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     totalNumberTicks++;
   }
 
-  static inline uint32 getLatestTicks(){
+  static inline uint32_t getLatestTicks(){
     return ticksArray[ticks_pointer];
   }
 
@@ -90,9 +107,11 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
 #endif //CYCLETIME
 
 #ifdef WEBSERVER
-      
-    ESP8266WebServer server(80);
-    
+    #ifdef SERVER_ESP32
+      WebServer server(80);
+    #else //ESP8266
+      ESP8266WebServer server(80);
+    #endif
     // root web page of the server
     void handleRoot() {
         String message = "<h1>Webserver 3D Touch Probe</h1>";
@@ -171,7 +190,12 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
 static inline void sendAliveMsg(){
   if(wlan_complete){                                      // check if WLAN connection is established
     Udp.beginPacket(clientIpAddr, clientUdpPort);
-    Udp.write(SERVER_ALIVE_MSG);                          // send alive messages to client
+    // udp.write(message,11); //Nachrichten text und länge
+    #ifdef SERVER_ESP32
+      Udp.write((uint8_t *)SERVER_ALIVE_MSG, sizeof(SERVER_ALIVE_MSG));                          // send alive messages to client
+    #else //ESP8266
+      Udp.write(SERVER_ALIVE_MSG);                          // send alive messages to client
+    #endif
     Udp.endPacket();
     #ifdef DEBUG
       Serial.printf("sendAliveMsg(): Sending server alive message to client IP: %s and Port: %d\n", clientIpAddr.toString().c_str(), clientUdpPort);
@@ -201,8 +225,8 @@ static inline void checkClientStatus(){
       #ifdef DEBUG
          Serial.printf("checkClientStatus(): Client battery is low\n");
       #endif
-      digitalWrite(BAT_ALM_OUT, LOW);
-      digitalWrite(ERROR_OUT, HIGH);
+      digitalWrite(SERVER_BAT_ALM_OUT, LOW);
+      digitalWrite(SERVER_ERROR_OUT, HIGH);
     }
 
     // check if client battery critical
@@ -210,8 +234,8 @@ static inline void checkClientStatus(){
       #ifdef DEBUG
         Serial.printf("checkClientStatus(): Client battery is critical\n");
       #endif
-      digitalWrite(BAT_ALM_OUT, LOW);
-      digitalWrite(ERROR_OUT, LOW);
+      digitalWrite(SERVER_BAT_ALM_OUT, LOW);
+      digitalWrite(SERVER_ERROR_OUT, LOW);
     }
 
     // check if client battery ok
@@ -219,8 +243,8 @@ static inline void checkClientStatus(){
       #ifdef DEBUG
         Serial.printf("checkClientStatus(): Client battery is ok\n");
       #endif
-      digitalWrite(BAT_ALM_OUT, HIGH);
-      digitalWrite(ERROR_OUT, HIGH);
+      digitalWrite(SERVER_BAT_ALM_OUT, HIGH);
+      digitalWrite(SERVER_ERROR_OUT, HIGH);
     }  
   } //end if(wlan_complete)
 } //end void checkClientStatus()
@@ -258,11 +282,21 @@ void wlanInit(){
     #ifdef DEBUG
       Serial.print(".");
     #endif
-    digitalWrite(WLAN_LED, HIGH);                         // switch off WLAN connection LED
+
+#ifdef CLIENT_ESP32
+      //############ ESP32 RGB LED? oder auch normale LED
+      //https://forum.arduino.cc/t/ws2812b-mit-esp8266-ansteuern/1253212
+      neopixelWrite(CLIENT_WLAN_LED,0,0,CLIENT_RGB_BRIGHTNESS); // Blue
+      delay(SLOW_BLINK);
+      neopixelWrite(CLIENT_WLAN_LED,0,0,0); // Off / black
+      delay(SLOW_BLINK);
+    #else
+      digitalWrite(SERVER_WLAN_LED, HIGH);                         // switch off WLAN connection LED
     //do not blink LED to avoid false detection by CNC Controller
     //delay(SLOW_BLINK); 
-    //digitalWrite(WLAN_LED, LOW);                        // switch on WLAN connection LED
+    //digitalWrite(SERVER_WLAN_LED, LOW);                        // switch on WLAN connection LED
     delay(SLOW_BLINK); 
+    #endif
     yield();
   } //waiting for clients to connect either 3D touch probe client or a webbrowser if webserver is enabled
 
@@ -282,7 +316,11 @@ void wlanInit(){
       Serial.printf("%d\n", clientUdpPort);
     #endif
     Udp.beginPacket(clientIpAddr, clientUdpPort);
-    Udp.write(SERVER_HELLO_MSG);
+    #ifdef SERVER_ESP32
+      Udp.write((uint8_t *)SERVER_HELLO_MSG, sizeof(SERVER_HELLO_MSG));                          // send alive messages to client
+    #else //ESP8266
+      Udp.write(SERVER_HELLO_MSG);
+    #endif    
     Udp.endPacket(); 
     
     // listen for respond from client
@@ -300,12 +338,18 @@ void wlanInit(){
           Serial.printf("wlanInit(): Detected client hello command durcing wlanInit, send a reply\n\n");
         #endif
         Udp.beginPacket(clientIpAddr, clientUdpPort);
-        Udp.write(SERVER_REPLY_MSG);
+        #ifdef SERVER_ESP32
+          Udp.write((uint8_t *)SERVER_REPLY_MSG, sizeof(SERVER_REPLY_MSG));                          // send alive messages to client
+        #else //ESP8266
+          Udp.write(SERVER_REPLY_MSG);
+        #endif
+        
         Udp.endPacket();        
       }
 
       wlan_complete = true;                               // WLAN connection is complete, stop listening for further incoming UPD packages
-      digitalWrite(WLAN_LED, LOW);                        // switch on WLAN connection LED to indicate sucessfull connection
+      //############ ESP32 RGB LED?
+      digitalWrite(SERVER_WLAN_LED, LOW);                        // switch on WLAN connection LED to indicate sucessfull connection
       #ifdef DEBUG
         Serial.print("wlanInit(): WLAN is complete\n");
       #endif
@@ -313,10 +357,11 @@ void wlanInit(){
       #ifdef DEBUG
         Serial.printf("wlanInit(): No respond from client yet\n");
       #endif
-      digitalWrite(WLAN_LED, HIGH);                       // switch off WLAN connection LED
+      //############ ESP32 RGB LED?
+      digitalWrite(SERVER_WLAN_LED, HIGH);                       // switch off WLAN connection LED
       //Do not blink WLAN LED to avoid false detection by CNC controller
       //delay(FAST_BLINK); 
-      //digitalWrite(WLAN_LED, LOW);                      // switch on WLAN connection LED
+      //digitalWrite(SERVER_WLAN_LED, LOW);                      // switch on WLAN connection LED
       delay(FAST_BLINK);
       yield(); 
     } //if (packetSize)
@@ -331,28 +376,38 @@ void wlanInit(){
 
 void setup(){
   #ifdef DEBUG
-    Serial.begin(115200);                                 // Setup Serial Interface with baud rate
+    Serial.begin(BAUD_RATE);                                 // Setup Serial Interface with baud rate
   #endif
 
   //initialize digital input/output pins
-  pinMode(POWER_LED,      OUTPUT);                        // LED to show power is on
-  pinMode(WLAN_LED,       OUTPUT);                        // LED to show WLAN connection state
-  pinMode(TOUCH_OUT,      OUTPUT);                        // Touch Output indicated the client has detected something
-  pinMode(ERROR_OUT,      OUTPUT);                        // Error Output, something is wrong, CNC should stop
-  pinMode(BAT_ALM_OUT,    OUTPUT);                        // Battery Alarm output to indicate to CNC input 
-  pinMode(SLEEP_IN, INPUT_PULLUP);                        // Send Client to sleep
+  pinMode(SERVER_POWER_LED,      OUTPUT);                        // LED to show power is on
+  pinMode(SERVER_WLAN_LED,       OUTPUT);                        // LED to show WLAN connection state
+  pinMode(SERVER_TOUCH_OUT,      OUTPUT);                        // Touch Output indicated the client has detected something
+  pinMode(SERVER_ERROR_OUT,      OUTPUT);                        // Error Output, something is wrong, CNC should stop
+  pinMode(SERVER_BAT_ALM_OUT,    OUTPUT);                        // Battery Alarm output to indicate to CNC input 
+  pinMode(SERVER_SLEEP_IN, INPUT_PULLUP);                        // Send Client to sleep
  
  //Initialize timer interrup for battery control
-  timer1_attachInterrupt(serviceIsr);
-  timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);          // DIV256 means one tick is 3.2us, total intervall time is 3.2us x SERVICE_INTERVALL, max is ~27 sec
-  timer1_write(SERVICE_INTERVALL);                        // Setup serice intervall
+
+  #ifdef SERVER_ESP32
+    serviceTimer = timerBegin(1);// Set timer frequency to 1Hz
+    timerAttachInterrupt(serviceTimer, &serviceIsr);// Attach onTimer function to our timer. 
+    timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);// Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
+    //timerAlarmEnable(serviceTimer);
+  #else //ESP8266
+    timer1_attachInterrupt(serviceIsr);
+    timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);          // DIV256 means one tick is 3.2us, total intervall time is 3.2us x SERVICE_INTERVALL, max is ~27 sec
+    timer1_write(SERVICE_INTERVALL);                        // Setup serice intervall
+  #endif
   
+
   //write default values of digital outputs
-  digitalWrite(POWER_LED,   LOW);                         // switch on power LED
-  digitalWrite(WLAN_LED,    HIGH);                        // switch off WLAN connection LED
-  digitalWrite(TOUCH_OUT,   HIGH);                        // switch off tough output
-  digitalWrite(ERROR_OUT,   HIGH);                        // switch off error output
-  digitalWrite(BAT_ALM_OUT, HIGH);                        // switch off error output
+  digitalWrite(SERVER_POWER_LED,   LOW);                         // switch on power LED
+  //############ ESP32 RGB LED?
+  digitalWrite(SERVER_WLAN_LED,    HIGH);                        // switch off WLAN connection LED
+  digitalWrite(SERVER_TOUCH_OUT,   HIGH);                        // switch off tough output
+  digitalWrite(SERVER_ERROR_OUT,   HIGH);                        // switch off error output
+  digitalWrite(SERVER_BAT_ALM_OUT, HIGH);                        // switch off error output
   
   //Setup Soft-AP
   #ifdef DEBUG
@@ -379,7 +434,7 @@ void setup(){
     #ifdef DEBUG
       Serial.println("Failed!");
     #endif
-    digitalWrite(ERROR_OUT, LOW);                         //switch on error output
+    digitalWrite(SERVER_ERROR_OUT, LOW);                         //switch on error output
   } // end if(result == true)
 } //end setup() 
 
@@ -404,12 +459,17 @@ void loop(){
   }
 
   // send sleep message to client if the server input pin is low (CNC does not need the sensor in the next minutes)
-  if (digitalRead(SLEEP_IN) == LOW){
+  if (digitalRead(SERVER_SLEEP_IN) == LOW){
     #ifdef DEBUG
       Serial.printf("loop(): CNC controller wants to send the client asleep\n");
     #endif
     Udp.beginPacket(clientIpAddr, clientUdpPort);
-    Udp.write(SERVER_SLEEP_MSG);
+    #ifdef SERVER_ESP32
+      Udp.write((uint8_t *)SERVER_SLEEP_MSG, sizeof(SERVER_SLEEP_MSG));
+    #else //ESP8266
+      Udp.write(SERVER_SLEEP_MSG);
+    #endif
+
     Udp.endPacket();
   }
 
@@ -422,7 +482,7 @@ void loop(){
 
         //received client sensor high command
         if (!strncmp (packetBuffer, CLIENT_TOUCH_HIGH_MSG, strlen(CLIENT_TOUCH_HIGH_MSG))){
-          digitalWrite(TOUCH_OUT, LOW);                                              // indicate current touch state by LED
+          digitalWrite(SERVER_TOUCH_OUT, LOW);                                              // indicate current touch state by LED
           char *highMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_HIGH_MSG);        // cut/decode additional information out of the client message
           if (!strncmp (highMsgAttach, "1", strlen("1")))
             msg_lost = true;
@@ -430,13 +490,17 @@ void loop(){
             Serial.printf("loop(): Client touch is high. Sending back the status. Attachment is %s\n", highMsgAttach);
           #endif
             Udp.beginPacket(clientIpAddr, clientUdpPort);
-            Udp.write(CLIENT_TOUCH_HIGH_MSG);             // send back client high messages to client for response/feedback
+            #ifdef SERVER_ESP32
+              Udp.write((uint8_t *)CLIENT_TOUCH_HIGH_MSG, sizeof(CLIENT_TOUCH_HIGH_MSG));
+            #else //ESP8266
+              Udp.write(CLIENT_TOUCH_HIGH_MSG);
+            #endif
             Udp.endPacket();
         }
 
         //received client sensor low command
         if (!strncmp (packetBuffer, CLIENT_TOUCH_LOW_MSG, strlen(CLIENT_TOUCH_LOW_MSG))){
-            digitalWrite(TOUCH_OUT, HIGH);
+            digitalWrite(SERVER_TOUCH_OUT, HIGH);
             char *lowMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_LOW_MSG);        // cut/decode additional information out of the client message
             if (!strncmp (lowMsgAttach, "1", strlen("1")))
               msg_lost = true;
@@ -444,7 +508,11 @@ void loop(){
                 Serial.printf("loop(): Client touch is low. Sending back the status. Attachment is %s\n", lowMsgAttach);
             #endif
             Udp.beginPacket(clientIpAddr, clientUdpPort);
-            Udp.write(CLIENT_TOUCH_LOW_MSG);                                        // send back client low messages to client for response/feedback
+            #ifdef SERVER_ESP32
+              Udp.write((uint8_t *)CLIENT_TOUCH_LOW_MSG, sizeof(CLIENT_TOUCH_LOW_MSG));
+            #else //ESP8266
+              Udp.write(CLIENT_TOUCH_LOW_MSG);
+            #endif
             Udp.endPacket();
         }
 
@@ -488,7 +556,11 @@ void loop(){
                 Serial.printf("loop(): Detected client hello command, send a hello reply\n\n");
             #endif
             Udp.beginPacket(clientIpAddr, clientUdpPort);
-            Udp.write(SERVER_REPLY_MSG);
+            #ifdef SERVER_ESP32
+              Udp.write((uint8_t *)SERVER_REPLY_MSG, sizeof(SERVER_REPLY_MSG));
+            #else //ESP8266
+              Udp.write(SERVER_REPLY_MSG);
+            #endif
             Udp.endPacket();
         }
 
