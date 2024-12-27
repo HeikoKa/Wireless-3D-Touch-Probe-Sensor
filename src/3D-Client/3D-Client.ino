@@ -1,17 +1,19 @@
 /**  Client
   *   
   *  @author Heiko Kalte  
-  *  @date 15.12.2024 
+  *  @date 27.12.2024 
   * 
-  *  @version 0.3
+  *  @version 0.4
   */
   // 0.1:   initial version
   // 0.2:   Changed function due to new sleep hardware (former deep sleep consumes to much power)
   // 0.3:   Added ESP32 Support
+  // 0.4:   refactoring and RBG LED support
 
   //TODO
-  // put states (error, wlan, touch, charge) in a struct 
   // LED aus und einblenden bei start und Ende
+  // WLAN LED Blinken
+  // man könnte die verschiedenen Errors batteryError, rssiError, touchStateError, aliveCounterError auch durch unterschiedliche Farben oder Blinken anzeigen
   
 
 #include <WiFiUdp.h>
@@ -21,50 +23,43 @@
     #include <WiFi.h>
   #else //ESP8266
     #include <ESP8266WiFi.h>
-    
 #endif
-
-#include <Adafruit_NeoPixel.h>    // for RGB LED
-
+#ifdef CLIENT_RGB_LED
+  #include <Adafruit_NeoPixel.h>    // for RGB LED
+#endif
 
 using namespace CncSensor;
 
 #ifndef CLIENT_ESP32
-  ADC_MODE(ADC_VCC);                                        // measure supply Voltage of the board with analog in, only ESP8266
+  ADC_MODE(ADC_VCC);                                         // measure supply Voltage of the board with analog in, only ESP8266
 #endif
 
-bool    wlan_complete            = false;                 // global variable to indicate if wlan connection is established completely 
-int     server_alive_cnt         = 0;                     // current "server is alive counter" value
-bool    touch_state              = LOW;                   // current touch sensor state
+int        server_alive_cnt         = 0;                     // current "server is alive counter" value
+bool       high_command_acknowledge = true;                  // indicates if the sended HIGH command was acknowledge by the server, sometimes UDP packages seem to get lost
+bool       low_command_acknowledge  = true;                  // indicates if the sended LOW command was acknowledge by the server, sometimes UDP packages seem to get lost
+int        ackCounterLow            = 0;                     // counter for timeout waiting for the server to replay to the low UDP command
+int        ackCounterHigh           = 0;                     // counter for timeout waiting for the server to replay to the high UDP command
+char       packetBuffer[UDP_PACKET_MAX_SIZE];                // general buffer to hold UDP messages
+WiFiUDP    Udp;
+long       rssi;                                             // WLAN signal strength
 
-bool    high_command_acknowledge = true;                  // indicates if the sended HIGH command was acknowledge by the server, sometimes UDP packages seem to get lost
-bool    low_command_acknowledge  = true;                  // indicates if the sended LOW command was acknowledge by the server, sometimes UDP packages seem to get lost
-int     ackCounterLow            = 0;                     // counter for timeout waiting for the server to replay to the low UDP command
-int     ackCounterHigh           = 0;                     // counter for timeout waiting for the server to replay to the high UDP command
-char    packetBuffer[UDP_PACKET_MAX_SIZE];                // general buffer to hold UDP messages
-bool    batteryError             = false;                 // error with the battery
-bool    rssiError                = false;                 // error with the WLAN rssi
-bool    touchStateError          = false;                 // error with the touch state
-bool    aliveCounterError        = false;                 // error with server alive counter
-
-struct states
+struct statesType
 {
-    bool    touch_state              = LOW;                   // current touch sensor state
-    bool    wlan_complete            = false;                 // global variable to indicate if wlan connection is established completely
+    bool    touchState               = LOW;                   // current touch sensor state
+    bool    wlanComplete             = false;                 // global variable to indicate if wlan connection is established completely
     bool    batteryError             = false;                 // error with the battery
     bool    rssiError                = false;                 // error with the WLAN rssi
     bool    touchStateError          = false;                 // error with the touch state
     bool    aliveCounterError        = false;                 // error with server alive counter
 }; 
+statesType states; 
 
-WiFiUDP Udp;
-long    rssi;                                             // WLAN signal strength
 #ifdef CLIENT_ESP32
   hw_timer_t *serviceTimer = NULL;
 #endif
 
 #ifdef CYCLETIME
-  int32_t bTimeLow, eTimeLow;
+  int32_t bTimeLow,  eTimeLow;
   int32_t bTimeHigh, eTimeHigh;
 
   static inline int32_t asm_ccount(void) {              // asm-helpers taken from https://sub.nanona.fi/esp8266/timing-and-ticks.html, reading the CCOUT register with clock ticks
@@ -73,53 +68,44 @@ long    rssi;                                             // WLAN signal strengt
     return r;
   }
 #endif
-
+#ifdef CLIENT_RGB_LED   // kann das auch in die IO Init, vermutlich nicht, weil es dann nicht global genug ist#########################
   Adafruit_NeoPixel pixels(1, CLIENT_RGB_LED_OUT, NEO_GRB + NEO_KHZ800);
-
-
-  static inline void start(){
-    //do everthing that schould be done during start
-  }
-
-  static inline void sleep(){
-    //do everthing that schould be done before sleep
-  }
-
+#endif
 
  static inline void doSensorHigh(void){
   String high_msg;
-  digitalWrite(CLIENT_TOUCH_LED, LOW);                           // indicate the current touch state by LED output
+  //digitalWrite(CLIENT_TOUCH_LED, LOW);                           // ######################indicate the current touch state by LED output
   #ifdef DEBUG
     Serial.println(CLIENT_TOUCH_HIGH_MSG);
   #endif
-  if (wlan_complete){
+  if (states.wlanComplete){
       Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());          // send UDP packet to server to indicate the 3D touch change 
-      high_msg = CLIENT_TOUCH_HIGH_MSG + String(touchStateError); // put the current touch error state into the UDP message
+      high_msg = CLIENT_TOUCH_HIGH_MSG + String(states.touchStateError); // put the current touch error state into the UDP message
       
       #ifdef CLIENT_ESP32
         Udp.write((uint8_t *)high_msg.c_str(), sizeof(high_msg.c_str()));
       #else //ESP8266
-         Udp.write(high_msg.c_str());
+        Udp.write(high_msg.c_str());
       #endif
       Udp.endPacket();
       high_command_acknowledge = false;                   // set acknowledge to false until the server responses with the same command
-      touch_state              = HIGH;                    // remember the current state
+      states.touchState        = HIGH;                    // remember the current state
+      controlLed();                                       // set touch LED
       #ifdef CYCLETIME
         bTimeHigh = asm_ccount();                         // take begin time for client to server to client cycle time measurement
       #endif
   }
 }
 
-
 static inline void doSensorLow(void){
   String low_msg;
-  digitalWrite(CLIENT_TOUCH_LED, HIGH);                          // indicate the current touch state by LED output
+  //digitalWrite(CLIENT_TOUCH_LED, HIGH);                          // ##########################indicate the current touch state by LED output
   #ifdef DEBUG
     Serial.println(CLIENT_TOUCH_LOW_MSG);
   #endif
-  if (wlan_complete){
+  if (states.wlanComplete){
     Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());        // send UDP packet to server to indicate the 3D touch change
-    low_msg = CLIENT_TOUCH_LOW_MSG + String(touchStateError); // put the current touch error state into the UDP message
+    low_msg = CLIENT_TOUCH_LOW_MSG + String(states.touchStateError); // put the current touch error state into the UDP message
     #ifdef CLIENT_ESP32
       Udp.write((uint8_t *)low_msg.c_str(), sizeof(low_msg.c_str()));
     #else //ESP8266
@@ -127,11 +113,12 @@ static inline void doSensorLow(void){
     #endif
     Udp.endPacket();
     low_command_acknowledge = false;                    // set acknowledge to false until the server responses with the same command
-    touch_state             = LOW;                      // remember the current state
+    states.touchState       = LOW;                      // remember the current state
+    controlLed();                                       // set touch LED
     #ifdef CYCLETIME
       bTimeLow = asm_ccount();                          // take begin time for client to server to client cycle time measurement
     #endif
-  } //wlan_complete
+  } //states.wlanComplete
 }
 
 
@@ -140,27 +127,26 @@ static inline void checkAliveCounter(void){
     #ifdef DEBUG
       Serial.printf("checkAliveCounter(): Server alive counter current: %d, max reconnect: %d, max server dead: %d\n", server_alive_cnt, SERVER_ALIVE_CNT_MAX, SERVER_ALIVE_CNT_DEAD);
     #endif
-    server_alive_cnt++;                                   // increase "the server has not answered" alive counter
-    aliveCounterError = false;                            // no error, no red LED
+    server_alive_cnt++;                                          // increase "the server has not answered" alive counter
+    states.aliveCounterError = false;                            // no error, no red LED
   }else{
     if (server_alive_cnt < SERVER_ALIVE_CNT_DEAD){
       // server alive messages are missing, but try to reconnect
       #ifdef DEBUG
         Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals. Going to sleep\n", server_alive_cnt);
       #endif
-      server_alive_cnt++;                                 // keep incrementing server alive counter during reconnect tries
-      wlan_complete     = false;                          // server is (temporary?) dead the connection must be re-establisched
-      aliveCounterError = true;                           // set red LED to indicate error
+      server_alive_cnt++;                                        // keep incrementing server alive counter during reconnect tries
+      states.wlanComplete      = false;                          // server is (temporary?) dead the connection must be re-establisched
+      states.aliveCounterError = true;                           // set internal state to indicate error
     }else{
       // server seems to be dead, client goes to sleep
       #ifdef DEBUG
         Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals. Going to sleep\n", server_alive_cnt);
       #endif
-      server_alive_cnt  = 0;
-      wlan_complete     = false;
-      aliveCounterError = true;                           // set red LED to indicate error
-      digitalWrite(CLIENT_SLEEP_OUT, LOW);                       // switch off external power
-
+      server_alive_cnt         = 0;
+      states.wlanComplete      = false;
+      states.aliveCounterError = true;                           // set internal state to indicate error
+      goSleep();                                                 // switch off external power
     } // end if SERVER_ALIVE_CNT_DEAD 
   } // end if SERVER_ALIVE_CNT_MAX
 } //end checkAliveCounter()
@@ -179,7 +165,6 @@ static inline void checkBatteryVoltage(void){
   #endif
   float batVoltage = analogVolts / 1000.0;
 
-
   if (batVoltage < BAT_LOW_VOLT){
     if (batVoltage < BAT_CRIT_VOLT){                      // check if battery voltage is critical
       cycle_msg = CLIENT_BAT_CRITICAL_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
@@ -187,20 +172,20 @@ static inline void checkBatteryVoltage(void){
         Serial.printf("checkBatteryVoltage(): Voltage is critical, current value is ");
         Serial.println(batVoltage);
       #endif
-    }else{                                                // battery is only low
+    }else{                                                 // battery is only low
       cycle_msg = CLIENT_BAT_LOW_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
       #ifdef DEBUG
         Serial.printf("checkBatteryVoltage(): Voltage is low, current value is ");
         Serial.println(batVoltage);
       #endif
     }
-    batteryError = true;                                  // indicate low or critical battery by LED
+    states.batteryError = true;                           // indicate low or critical battery by LED
   }else{                                                  // battery is ok
     cycle_msg = CLIENT_BAT_OK_MSG + String(batVoltage);   // pack message and bat voltage in the UDP frame
     #ifdef DEBUG
       Serial.printf("checkBatteryVoltage(): Bat Voltage is ok, measured value is %.2fV (low bat is %.2fV and critical bat is %.2fV)\n", batVoltage, BAT_LOW_VOLT, BAT_CRIT_VOLT);
     #endif
-    batteryError = false;
+    states.batteryError = false;
   }
   Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
   #ifdef CLIENT_ESP32
@@ -213,12 +198,12 @@ static inline void checkBatteryVoltage(void){
 
 
 static inline void checkWlanStatus(void) {
-  if (wlan_complete){
+  if (states.wlanComplete){
     if (WiFi.status() != WL_CONNECTED){
       #ifdef DEBUG
         Serial.printf("checkWlanStatus(): WLAN is not connected anymore\n");
       #endif
-      wlan_complete = false;
+      states.wlanComplete = false;
     }
 
     rssi = WiFi.RSSI();
@@ -227,15 +212,15 @@ static inline void checkWlanStatus(void) {
         Serial.print("checkWlanStatus(): ERROR: WLAN signal strength is critical, RSSI:");
         Serial.println(rssi);
       #endif
-      rssiError = true;
+      states.rssiError = true;
     }else{
       #ifdef DEBUG
         Serial.print("checkWlanStatus(): WLAN signal strength is ok, RSSI:");
         Serial.println(rssi);
       #endif
-      rssiError = false;
+      states.rssiError = false;
     }
-  } //end if (wlan_complete)
+  } //end if (states.wlanComplete)
   Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
   String cycle_msg = CLIENT_RSSI_MSG + String(rssi);   // pack message and rssi in the UDP frame
   #ifdef CLIENT_ESP32
@@ -262,13 +247,6 @@ static inline void sendAliveMsg(void) {
   Udp.endPacket();
 }
 
-static inline void setErrorLED(bool batteryError, bool rssiError, bool touchStateError, bool aliveCounterError){
-  if (batteryError || rssiError || touchStateError || aliveCounterError)
-    digitalWrite(CLIENT_ERROR_OUT, LOW);                // enlight red LED if any error has occurred
-  else
-    digitalWrite(CLIENT_ERROR_OUT, HIGH);               // switch off light if no error is reported
-}
-
 static inline void doService(void) {
   // Does all service activities that are called regularly by timer interrupt
   #ifdef DEBUG
@@ -278,7 +256,7 @@ static inline void doService(void) {
   checkAliveCounter();                                    // check server alive counter in service
   sendAliveMsg();                                         // send client alive in service
   checkWlanStatus();                                      // check WLAN status and signal strength
-  setErrorLED(batteryError, rssiError, touchStateError, aliveCounterError);  // set the red error LED
+  controlLed();                                           // set the red error LED
   #ifdef DEBUG
     Serial.printf("doService(): end\n\n");
   #endif
@@ -298,7 +276,7 @@ void wlanInit(void){
   
   WiFi.begin(SSID, password);                             // connect to WLAN 
   while (WiFi.status() != WL_CONNECTED){                  // stay in this loop until a WLAN connection could be established
-    #ifdef CLIENT_ESP32
+    /*#ifdef CLIENT_ESP32
       neopixelWrite(CLIENT_WLAN_LED,0,0,CLIENT_RGB_BRIGHTNESS); // Blue
       delay(SLOW_BLINK);
       neopixelWrite(CLIENT_WLAN_LED,0,0,0); // Off / black
@@ -309,7 +287,8 @@ void wlanInit(void){
       digitalWrite(CLIENT_WLAN_LED, LOW);                          // blink WLAN LED slowly to indicate connection try
       delay(SLOW_BLINK);
     #endif
-    yield();
+    yield();*/
+    controlLed();
     #ifdef DEBUG
       Serial.print(".");
     #endif
@@ -321,7 +300,7 @@ void wlanInit(void){
     Serial.println(" connected to WLAN network");
   #endif
   
-  while(!wlan_complete){
+  while(!states.wlanComplete){
     #ifdef DEBUG
       Serial.printf("wlanInit(): Sending hello message to IP %s, UDP port %d\n", serverIpAddr.toString().c_str(), serverUdpPort);
     #endif
@@ -354,8 +333,8 @@ void wlanInit(void){
           #endif
           Udp.endPacket();
         }
-        wlan_complete = true;                             // WLAN connection is complete
-        digitalWrite(CLIENT_WLAN_LED, HIGH);                     // switch off WLAN LED to indicate that WLAN connection is complete (no more blinking)
+        states.wlanComplete = true;                             // WLAN connection is complete
+        controlLed();                     // switch off WLAN LED to indicate that WLAN connection is complete (no more blinking)
         #ifdef DEBUG
           Serial.print("wlanInit(): WLAN is complete\n");
         #endif 
@@ -363,66 +342,103 @@ void wlanInit(void){
         #ifdef DEBUG
           Serial.printf("wlanInit(): Received UDP packet from unexpected IP: %s, port %d\n",  Udp.remoteIP().toString().c_str(), Udp.remotePort());
         #endif
-        wlan_complete = false;                            // wrong WLAN server address
+        states.wlanComplete = false;                            // wrong WLAN server address
       }
     }else{                                                // no UDP packet received yet
       #ifdef DEBUG
         Serial.printf("wlanInit(): No respond from server yet\n");
       #endif
+      /*
       digitalWrite(CLIENT_WLAN_LED, HIGH);                       // toggle WLAN LED quickly to indicate connection try
       delay(FAST_BLINK);
       digitalWrite(CLIENT_WLAN_LED, LOW);                        // toggle WLAN LED quickly to indicate connection try
       delay(FAST_BLINK);
-      yield();
+      yield();*/
+      controlLed();
     } //end if (packetSize)
-  }//end while(!wlan_complete)
+  }//end while(!states.wlanComplete)
 }//end void WlanInit()
 
-void controlRgbLed(void) {
-  if(touch_state){
-    pixels.setPixelColor(0, pixels.Color(0, 0, CLIENT_RGB_BRIGHTNESS)); // Blue rgb(0,0,255)
-  }else{
-    if (!wlan_complete){
-      pixels.setPixelColor(0, pixels.Color(CLIENT_RGB_BRIGHTNESS, CLIENT_RGB_BRIGHTNESS*0.65,0)); // Orange rgb(255,165,0); rgb(100%,65%,0%)
+
+void controlLed(void) {
+  #ifdef CLIENT_RGB_LED   // one RGB LED for all states
+    if(states.touchState){  // current touch state has LED Priority over all other LEDs
+      pixels.setPixelColor(0, pixels.Color(0, 0, CLIENT_RGB_BRIGHTNESS)); // Blue rgb(0,0,255)
     }else{
-      if (batteryError || rssiError || touchStateError || aliveCounterError){
-        pixels.setPixelColor(0, pixels.Color(CLIENT_RGB_BRIGHTNESS, 0, 0)); // red rgb(255,0,0)
+      if (!states.wlanComplete){
+        pixels.setPixelColor(0, pixels.Color(CLIENT_RGB_BRIGHTNESS, CLIENT_RGB_BRIGHTNESS*0.65,0)); // Orange rgb(255,165,0); rgb(100%,65%,0%)
       }else{
-        if (digitalRead(CLIENT_CHARGE_IN) == HIGH){
-          pixels.setPixelColor(0, pixels.Color(0, CLIENT_RGB_BRIGHTNESS, 0)); // green rgb(0,255,0)
+        if (states.batteryError || states.rssiError || states.touchStateError || states.aliveCounterError){
+          pixels.setPixelColor(0, pixels.Color(CLIENT_RGB_BRIGHTNESS, 0, 0)); // red rgb(255,0,0)
         }else{
-          pixels.setPixelColor(0, pixels.Color(CLIENT_RGB_BRIGHTNESS, CLIENT_RGB_BRIGHTNESS, CLIENT_RGB_BRIGHTNESS)); // whilte rgb(255,255,255)
-        } //end if loading
-      } //end if error
-    } //end if wlan_complete
-  } //end if touch_state
-  pixels.show();   // Send the updated pixel colors to the hardware.
+          if (digitalRead(CLIENT_CHARGE_IN) == LOW){
+            pixels.setPixelColor(0, pixels.Color(0, CLIENT_RGB_BRIGHTNESS, 0)); // green rgb(0,255,0)
+          }else{ //if none of the above applys, make LED white to indicate, that the sensor is on power
+            pixels.setPixelColor(0, pixels.Color(CLIENT_RGB_BRIGHTNESS, CLIENT_RGB_BRIGHTNESS, CLIENT_RGB_BRIGHTNESS)); // white rgb(255,255,255)
+          } //end if battery charging
+        } //end if error
+      } //end if states.wlanComplete
+    } //end if states.touchState
+    pixels.show();   // Send the updated pixel colors to the hardware.
+  #else // dedicated LEDs for the states
+    digitalWrite(CLIENT_POWER_LED, LOW);                   // switch on power LED
+
+    if (states.wlanComplete)
+      digitalWrite(CLIENT_WLAN_LED, HIGH);                   // switch off WLAN connection LED
+    else
+      digitalWrite(CLIENT_WLAN_LED, LOW);                   // switch off WLAN connection LED
+   
+    if (states.touchState ==HIGH)
+      digitalWrite(CLIENT_TOUCH_LED, LOW);                   // switch off touch LED
+    else
+      digitalWrite(CLIENT_TOUCH_LED, HIGH);                   // switch off touch LED
+
+    if (states.batteryError || states.rssiError || states.touchStateError || states.aliveCounterError)
+      digitalWrite(CLIENT_ERROR_OUT, LOW);                // enlight red LED if any error has occurred
+    else
+      digitalWrite(CLIENT_ERROR_OUT, HIGH);               // switch off light if no error is reported
+  #endif
 } //end controlRgbLed
 
+
+
+static inline void initIo(void) {
+  #ifdef CLIENT_ESP32
+    analogReadResolution(12);   //set the resolution to 12 bits (0-4095) for ESP32 only
+  #endif
+
+  #ifdef CLIENT_RGB_LED
+    pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
+
+  #else
+    //initialize digital output pins
+    pinMode(CLIENT_POWER_LED,         OUTPUT);              // LED to show power is on
+    pinMode(CLIENT_WLAN_LED,          OUTPUT);              // LED to show WLAN connection state
+    pinMode(CLIENT_ERROR_OUT,         OUTPUT);              // Error LED
+    pinMode(CLIENT_TOUCH_LED,         OUTPUT);              // Touch LED visual output
+  #endif
+  //initialize digital output pins
+  pinMode(CLIENT_SLEEP_OUT,         OUTPUT);              // control external sleep hardware
+  //initialize digital input pins and isr
+  pinMode(CLIENT_TOUCH_IN,  INPUT_PULLUP);                 // set DIO to input with pullup
+  pinMode(CLIENT_CHARGE_IN, INPUT_PULLUP);                 // set DIO to input with pullup
+  
+  digitalWrite(CLIENT_SLEEP_OUT,  HIGH);                    // switch on output to prevent external sleep hardware to send cpu to sleep
+  controlLed();                                             // set all LEDs
+}
+
+static inline void goSleep(){
+  //###################### LED shutdown
+  digitalWrite(CLIENT_SLEEP_OUT, LOW);                 // switch off external power
+}
 
 void setup(void) {
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                 // Setup Serial Interface with baud rate
   #endif
 
-  #ifdef CLIENT_ESP32
-    analogReadResolution(12);   //set the resolution to 12 bits (0-4095) for ESP32 only
-  #endif
+  initIo();
 
-  //initialize digital output pins
-  pinMode(CLIENT_POWER_LED,         OUTPUT);              // LED to show power is on
-  pinMode(CLIENT_WLAN_LED,          OUTPUT);              // LED to show WLAN connection state
-  pinMode(CLIENT_ERROR_OUT,         OUTPUT);              // Error LED
-  pinMode(CLIENT_TOUCH_LED,         OUTPUT);              // Touch LED visual output
-  pinMode(CLIENT_SLEEP_OUT,         OUTPUT);              // control external sleep hardware
-
-  pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
-
-  
-  //initialize digital input pins and isr
-  pinMode(CLIENT_TOUCH_IN,  INPUT_PULLUP);                 // set DIO to input with pullup
-  pinMode(CLIENT_CHARGE_IN, INPUT_PULLUP);                 // set DIO to input with pullup
-  
   //Setup timer interrup for service routines
   #ifdef CLIENT_ESP32
     serviceTimer = timerBegin(1);                           //Timer ticks every second
@@ -435,24 +451,16 @@ void setup(void) {
     timer1_write(SERVICE_INTERVALL);                        // has to start early, to allow the client to go to sleep, if the server is dead
   #endif
 
-  //write default values of digital outputs
-  digitalWrite(CLIENT_POWER_LED,         LOW);                   // switch on power LED
-  digitalWrite(CLIENT_WLAN_LED,         HIGH);                   // switch off WLAN connection LED
-  digitalWrite(CLIENT_ERROR_OUT,        HIGH);                   // switch off error LED
-  digitalWrite(CLIENT_TOUCH_LED,        HIGH);                   // switch off touch LED
-  digitalWrite(CLIENT_SLEEP_OUT,        HIGH);                   // switch on output to prevent external sleep hardware to send cpu to sleep
-
-  // Init wlan communication with server
-  wlanInit();
+  wlanInit();                                                // Init wlan communication with server
 } //end setup()
 
 
 
 void loop(void){
 
-  controlRgbLed();  // ############################### muss das immer gesetzt werden
+  //controlLed();  // ############################### muss das immer gesetzt werden
   //reconnect to server if connection got lost
-   if (wlan_complete == false){
+   if (states.wlanComplete == false){
     #ifdef DEBUG
       Serial.printf("loop(): Lost connection to server, need to re-init wlan connection\n");
     #endif
@@ -460,12 +468,12 @@ void loop(void){
    }
   
   // do pin polling instead of interrupt, check for state changes high->low or low->high
-  if ((digitalRead(CLIENT_TOUCH_IN) == HIGH) && (touch_state == LOW)){
+  if ((digitalRead(CLIENT_TOUCH_IN) == HIGH) && (states.touchState == LOW)){
     doSensorHigh();
     delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   }
   
-  if ((digitalRead(CLIENT_TOUCH_IN) == LOW) && (touch_state == HIGH)){
+  if ((digitalRead(CLIENT_TOUCH_IN) == LOW) && (states.touchState == HIGH)){
     doSensorLow();
     delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   }
@@ -485,7 +493,8 @@ void loop(void){
         #endif
         doSensorLow();                                    // server did not answer to low message from client, re-transmit
         ackCounterLow   = 0;                              // reset counter for re-transmitting low message
-        touchStateError = true;                           // indicate error by red LED
+        states.touchStateError = true;                           // indicate error by red LED
+        controlLed();
      }
    }
 
@@ -497,7 +506,8 @@ void loop(void){
         #endif
         doSensorHigh();                                   // server did not answer to low message from client, re-transmit
         ackCounterHigh  = 0;                              // reset counter for re-transmitting low message
-        touchStateError = true;                           // indicate error by red LED
+        states.touchStateError = true;                           // indicate error by red LED
+        controlLed();
      }
    }
   
@@ -514,7 +524,8 @@ void loop(void){
       #ifdef DEBUG
         Serial.println("loop(): Detected sleep command\nGoing to deep sleep...");
       #endif
-      digitalWrite(CLIENT_SLEEP_OUT, LOW);                 // switch off external power
+      goSleep();
+
     }
 
     // receiving alive message from server and resetting the alive counter
