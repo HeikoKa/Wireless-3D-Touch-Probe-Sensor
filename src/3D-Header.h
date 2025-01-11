@@ -25,7 +25,7 @@
 #define CYCLETIME             // enable measuring the round trip delay from client to server back to client
 
 // server specific defines
-//#define SERVER_ESP32         // defines server as a ESP32 instead of a ESP8266, comment out to switch to ESP8266
+#define SERVER_ESP32         // defines server as a ESP32 instead of a ESP8266, comment out to switch to ESP8266
 //#define SERVER_RGB_LED       // do you have multiple LEDs or just ohne RGB LED
 #define WEBSERVER            // enable webserver
 
@@ -52,9 +52,9 @@ namespace CncSensor{
   const long         WIFI_RSSI_REPORT_LEVEL = -80;                      // RSSI level, WLAN signal strength e.g. -40 is better -70 is worse (best was -44)
   const int          SERVER_TICKS_ARRAY_SIZE= 10;                       // Array Size of measured ticks
   #ifdef SERVER_ESP32
-    const float        NANOSEC_PER_TICK       = 12.5;                     // number of nanosecond per measured tick in CCOUNT register
+    const float      NANOSEC_PER_TICK       = 12.5;                     // ##############################number of nanosecond per measured tick in CCOUNT register
   #else
-    const float        NANOSEC_PER_TICK       = 12.5;                     // number of nanosecond per measured tick in CCOUNT register
+    const float      NANOSEC_PER_TICK       = 12.5;                     // number of nanosecond per measured tick in CCOUNT register
   #endif
   
   //client consts
@@ -65,20 +65,20 @@ namespace CncSensor{
   const char*        CLIENT_ALIVE_MSG       = "alive";                  // UDP message from client alive
   const char*        CLIENT_RSSI_MSG        = "rssi";                   // UDP message from client with rssi (WLAN signal strength)
   const char*        CLIENT_CYCLE_MSG       = "CYC:";                   // UDP message from client to server to transmit the last measured cycle time ticks
-  const int          SERVER_ALIVE_CNT_MAX   = 1;                        // maximum server alive counter value, try to reconnect
-  const int          SERVER_ALIVE_CNT_DEAD  = 2;                        // maximum server alive counter value, server seems to be dead
+  const int          SERVER_ALIVE_CNT_MAX   = 2;                        // maximum server alive counter value, try to reconnect
+  const int          SERVER_ALIVE_CNT_DEAD  = 3;                        // maximum server alive counter value, server seems to be dead
   const int          SERVER_AQUN_CNT_MAX    = 2000;                     // number of loop cycles before the server must acknowledge the high/low messages
   const int          TOUCH_PIN_DEBOUNCE     = 700;                      // debounce time in µs for touch input pin
 
 
   //client and server consts
-  const uint32_t     SERVICE_INTERVALL       = 4000000;                  // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
-  const uint32_t     SERVICE_INTERVALL_ESP32 = 30;                       // ESP32 Time in sec between service interrupt calls
-  const int          UDP_PACKET_MAX_SIZE     = 16;                       // UDP buffer size
-  const uint8_t      SLOW_BLINK              = 1000;                     // delay for slow blinking LED
-  const uint8_t      FAST_BLINK              = 500;                      // delay for fast blinking LED
-  const uint8_t      SERVER_RGB_BRIGHTNESS   = 5;                        // brightness of the RGB LED
-  const uint8_t      CLIENT_RGB_BRIGHTNESS   = 5;                        // brightness of the RGB LED
+  const uint32_t     SERVICE_INTERVALL       = 4000000;                 // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
+  const uint32_t     SERVICE_INTERVALL_ESP32 = 20000000;                // ESP32 Time in 1MHz ticks between service interrupt calls (20000000 = 20sec)
+  const int          UDP_PACKET_MAX_SIZE     = 32;                      // UDP buffer size
+  const uint8_t      SLOW_BLINK              = 1000;                    // delay for slow blinking LED
+  const uint8_t      FAST_BLINK              = 500;                     // delay for fast blinking LED
+  const uint8_t      SERVER_RGB_BRIGHTNESS   = 5;                       // brightness of the RGB LED (max 255)
+  const uint8_t      CLIENT_RGB_BRIGHTNESS   = 5;                       // brightness of the RGB LED (max 255)
  
   //IP addresses
   IPAddress         serverIpAddr(192,168,  2,1);                        // local IP address of server
@@ -103,50 +103,50 @@ namespace CncSensor{
 
 
   #ifdef SERVER_ESP32
-    //Server specific LEDs
-    #ifdef CLIENT_RGB_LED
+    //ESP32 Server specific LEDs
+    #ifdef SERVER_RGB_LED
       const uint8_t     SERVER_RGB_LED_OUT    = 21;                   // server rgb led
     #else
-      //########################################################################
+      const uint8_t     SERVER_POWER_LED      = 22;                   // Power LED  (AUXIO1)
+      const uint8_t     SERVER_WLAN_LED       = 5;                    // LED to inducate the current WLAN state
     #endif
-    const uint8_t     SERVER_POWER_LED        = 3;                    // Power LED 
-    const uint8_t     SERVER_WLAN_LED         = 21;                   // LED to inducate the current WLAN state
-    const uint8_t     SERVER_TOUCH_OUT        = 1;                    // LED to indicate a touch of the 3D sense
-    const uint8_t     SERVER_ERROR_OUT        = 2;                    // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
-    const uint8_t     SERVER_SLEEP_IN         = 3;                    // Input pin for the CNC controller to indicate that the slave can go to sleep
-    const uint8_t     SERVER_BAT_ALM_OUT      = 4;                    // server battery is low
+    const uint8_t     SERVER_TOUCH_OUT        = 17;                   // LED to indicate a touch of the 3D sense
+    const uint8_t     SERVER_ERROR_OUT        = 23;                   // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
+    const uint8_t     SERVER_SLEEP_IN         = 33;                   // Input pin for the CNC controller to indicate that the slave can go to sleep
+	const uint8_t     SERVER_SLEEP_LED        = 19;                   // Sleep Output for LED
+    const uint8_t     SERVER_BAT_ALM_OUT      = 21;                   // server battery is low
     #else
-    //Server specific LEDs
-    #ifdef CLIENT_RGB_LED
+    //ESP8266 Server specific LEDs
+    #ifdef SERVER_RGB_LED
       const uint8_t     SERVER_RGB_LED_OUT    = 21;                   // server rgb led
     #else
-      //########################################################################
+      const uint8_t     SERVER_POWER_LED      = 22;                   // Power LED 
+      const uint8_t     SERVER_WLAN_LED       = 5;                    // LED to inducate the current WLAN state
     #endif
-    const uint8_t     SERVER_POWER_LED        = 2;                    // (D4) Power LED 
-    const uint8_t     SERVER_WLAN_LED         = 0;                    // (D3) LED to inducate the current WLAN state
-    const uint8_t     SERVER_TOUCH_OUT        = 5;                    // (D1) LED to indicate a touch of the 3D sense
-    const uint8_t     SERVER_ERROR_OUT        = 14;                   // (D5) ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
-    const uint8_t     SERVER_SLEEP_IN         = 12;                   // (D6) Input pin for the CNC controller to indicate that the slave can go to sleep
-    const uint8_t     SERVER_BAT_ALM_OUT      = 4;                    // (D2) client battery is low
+    const uint8_t     SERVER_TOUCH_OUT        = 17;                   // LED and output to indicate a touch of the 3D sense
+    const uint8_t     SERVER_ERROR_OUT        = 23;                   // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
+    const uint8_t     SERVER_SLEEP_IN         = 33;                   // Input pin for the CNC controller to indicate that the slave can go to sleep
+	const uint8_t     SERVER_SLEEP_LED        = 19;                   // Sleep Output for LED
+    const uint8_t     SERVER_BAT_ALM_OUT      = 21;                   // client battery is low
   #endif
 
   #ifdef CLIENT_ESP32
-    //Client specific LEDs
+    //ESP32Client specific LEDs
     #ifdef CLIENT_RGB_LED
-      const uint8_t     CLIENT_RGB_LED_OUT    = 21;                   // client rgb led
+      const uint8_t     CLIENT_RGB_LED_OUT    = 1;                   // client rgb led
     #else
       const uint8_t     CLIENT_POWER_LED      = 5;                    // Power LED 
       const uint8_t     CLIENT_WLAN_LED       = 6;                    // LED to inducate the current WLAN state
       const uint8_t     CLIENT_ERROR_OUT      = 14;                   // LED to indicate error
       const uint8_t     CLIENT_TOUCH_LED      = 15;                   // LED to indicate a touch of the 3D sensor
     #endif
-    const uint8_t     CLIENT_TOUCH_IN         = 1;                    // digital input pin to listen
-    const uint8_t     CLIENT_SLEEP_OUT        = 2;                    // controls external sleep hardware
-    const uint8_t     CLIENT_ANALOG_CHANNEL   = 3;                    // Analog In channel for reading the battery voltage
-    const uint8_t     CLIENT_CHARGE_IN        = 4;                    // Battery Charging Input
+    const uint8_t     CLIENT_TOUCH_IN         = 2;                    // digital input pin to listen
+    const uint8_t     CLIENT_SLEEP_OUT        = 3;                    // controls external sleep hardware
+    const uint8_t     CLIENT_ANALOG_CHANNEL   = 4;                    // Analog In channel for reading the battery voltage
+    const uint8_t     CLIENT_CHARGE_IN        = 5;                    // Battery Charging Input
 
-  #else //ESP8266
-    //Client specific LEDs
+  #else
+    //ESP8266 Client specific LEDs
     #ifdef CLIENT_RGB_LED
       const uint8_t     CLIENT_RGB_LED_OUT    = 21;                    // client rgb led
     #else
@@ -160,5 +160,5 @@ namespace CncSensor{
     const uint8_t     CLIENT_CHARGE_IN        = 7;                    // Battery Charging Input
 
   #endif //ifdef CLIENT_ESP32
-}  // namespaceCncSensor
+}  // namespace CncSensor
 #endif

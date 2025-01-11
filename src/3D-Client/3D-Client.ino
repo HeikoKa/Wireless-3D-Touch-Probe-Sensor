@@ -12,7 +12,8 @@
 
   //TODO
   // man könnte die verschiedenen Errors batteryError, rssiError, touchStateError, aliveCounterError auch durch unterschiedliche Farben oder Blinken anzeigen
-  
+  // kann ESP8266 auch "Udp.printf(CLIENT_REPLY_MSG);" dann könnte man sich eine Unterscheidung sparen
+
 
 #include <WiFiUdp.h>
 #include <Ticker.h>
@@ -40,6 +41,7 @@ int        ackCounterHigh           = 0;                     // counter for time
 char       packetBuffer[UDP_PACKET_MAX_SIZE];                // general buffer to hold UDP messages
 WiFiUDP    Udp;
 long       rssi;                                             // WLAN signal strength
+bool       serviceRequest           = false;                 // interrupt service can request a service intervall by this flag
 
 struct statesType
 {
@@ -67,13 +69,14 @@ statesType states;
     return r;
   }
 #endif
+
 #ifdef CLIENT_RGB_LED   // kann das auch in die IO Init, vermutlich nicht, weil es dann nicht global genug ist#########################
   Adafruit_NeoPixel pixels(1, CLIENT_RGB_LED_OUT, NEO_GRB + NEO_KHZ800);
 #endif
 
  static inline void doSensorHigh(void){
   String high_msg;
-  //digitalWrite(CLIENT_TOUCH_LED, LOW);                           // ######################indicate the current touch state by LED output
+  //digitalWrite(CLIENT_TOUCH_LED, LOW);                           // ########statt controlLed##############indicate the current touch state by LED output
   #ifdef DEBUG
     Serial.println(CLIENT_TOUCH_HIGH_MSG);
   #endif
@@ -82,7 +85,8 @@ statesType states;
       high_msg = CLIENT_TOUCH_HIGH_MSG + String(states.touchStateError); // put the current touch error state into the UDP message
       
       #ifdef CLIENT_ESP32
-        Udp.write((uint8_t *)high_msg.c_str(), sizeof(high_msg.c_str()));
+        //Udp.write((uint8_t *)high_msg.c_str(), sizeof(high_msg.c_str()));
+        Udp.printf(high_msg.c_str());
       #else //ESP8266
         Udp.write(high_msg.c_str());
       #endif
@@ -93,20 +97,19 @@ statesType states;
       #ifdef CYCLETIME
         bTimeHigh = asm_ccount();                         // take begin time for client to server to client cycle time measurement
       #endif
-  }
-}
+  } // end if (states.wlanComplete)
+} // end void doSensorHigh(void)
 
 static inline void doSensorLow(void){
   String low_msg;
-  //digitalWrite(CLIENT_TOUCH_LED, HIGH);                          // ##########################indicate the current touch state by LED output
   #ifdef DEBUG
     Serial.println(CLIENT_TOUCH_LOW_MSG);
   #endif
   if (states.wlanComplete){
-    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());        // send UDP packet to server to indicate the 3D touch change
+    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());               // send UDP packet to server to indicate the 3D touch change
     low_msg = CLIENT_TOUCH_LOW_MSG + String(states.touchStateError); // put the current touch error state into the UDP message
     #ifdef CLIENT_ESP32
-      Udp.write((uint8_t *)low_msg.c_str(), sizeof(low_msg.c_str()));
+      Udp.printf(low_msg.c_str());
     #else //ESP8266
       Udp.write(low_msg.c_str());
     #endif
@@ -117,8 +120,8 @@ static inline void doSensorLow(void){
     #ifdef CYCLETIME
       bTimeLow = asm_ccount();                          // take begin time for client to server to client cycle time measurement
     #endif
-  } //states.wlanComplete
-}
+  } //end if (states.wlanComplete)
+} //end void doSensorLow(void)
 
 
 static inline void checkAliveCounter(void){
@@ -148,25 +151,24 @@ static inline void checkAliveCounter(void){
       goSleep();                                                 // switch off external power
     } // end if SERVER_ALIVE_CNT_DEAD 
   } // end if SERVER_ALIVE_CNT_MAX
-} //end checkAliveCounter()
+} // end checkAliveCounter()
 
 
 
 static inline void checkBatteryVoltage(void){
-  
   String cycle_msg;
-
   // measure battery voltage
   #ifdef CLIENT_ESP32
     int analogVolts = analogReadMilliVolts(CLIENT_ANALOG_CHANNEL);
+    float batVoltage = 2*analogVolts/1000;                          // Battery Voltage is divided by 2 by resistors on PCB
   #else
     int analogVolts = ESP.getVcc();
+    float batVoltage = analogVolts / 1000.0;
   #endif
-  float batVoltage = analogVolts / 1000.0;
-
+  
   if (batVoltage < BAT_LOW_VOLT){
-    if (batVoltage < BAT_CRIT_VOLT){                      // check if battery voltage is critical
-      cycle_msg = CLIENT_BAT_CRITICAL_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
+    if (batVoltage < BAT_CRIT_VOLT){                                // check if battery voltage is critical
+      cycle_msg = CLIENT_BAT_CRITICAL_MSG + String(batVoltage);     // pack message and bat voltage in the UDP frame
       #ifdef DEBUG
         Serial.printf("checkBatteryVoltage(): Voltage is critical, current value is ");
         Serial.println(batVoltage);
@@ -188,12 +190,12 @@ static inline void checkBatteryVoltage(void){
   }
   Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
   #ifdef CLIENT_ESP32
-    Udp.write((uint8_t *)cycle_msg.c_str(), sizeof(cycle_msg.c_str()));
+    Udp.printf(cycle_msg.c_str());
   #else //ESP8266
     Udp.write(cycle_msg.c_str());
   #endif
   Udp.endPacket();
-}
+} // end void checkBatteryVoltage(void)
 
 
 static inline void checkWlanStatus(void) {
@@ -204,7 +206,6 @@ static inline void checkWlanStatus(void) {
       #endif
       states.wlanComplete = false;
     }
-
     rssi = WiFi.RSSI();
     if (rssi < WIFI_RSSI_REPORT_LEVEL){
       #ifdef DEBUG
@@ -218,16 +219,15 @@ static inline void checkWlanStatus(void) {
         Serial.println(rssi);
       #endif
       states.rssiError = false;
-    }
+    } // end if (rssi < WIFI_RSSI_REPORT_LEVEL)
   } //end if (states.wlanComplete)
   Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
   String cycle_msg = CLIENT_RSSI_MSG + String(rssi);   // pack message and rssi in the UDP frame
   #ifdef CLIENT_ESP32
-    Udp.write((uint8_t *)cycle_msg.c_str(), sizeof(cycle_msg.c_str()));
+    Udp.printf(cycle_msg.c_str());
   #else //ESP8266
     Udp.write(cycle_msg.c_str());
   #endif
-  
   Udp.endPacket();
 } //end void checkWlanStatus()
 
@@ -239,14 +239,14 @@ static inline void sendAliveMsg(void) {
   #endif
   Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
   #ifdef CLIENT_ESP32
-    Udp.write((uint8_t *)CLIENT_ALIVE_MSG, sizeof(CLIENT_ALIVE_MSG));
+    Udp.printf(CLIENT_ALIVE_MSG);
   #else //ESP8266
     Udp.write(CLIENT_ALIVE_MSG);
   #endif
   Udp.endPacket();
-}
+} // end void sendAliveMsg(void)
 
-static inline void doService(void) {
+static inline void doService(void){
   // Does all service activities that are called regularly by timer interrupt
   #ifdef DEBUG
     Serial.printf("\ndoService(): start service\n");
@@ -256,15 +256,17 @@ static inline void doService(void) {
   sendAliveMsg();                                         // send client alive in service
   checkWlanStatus();                                      // check WLAN status and signal strength
   controlLed(CLIENT_RGB_BRIGHTNESS);                      // set the red error LED
+  serviceRequest = false;                                 // reset service flag after service
   #ifdef DEBUG
     Serial.printf("doService(): end\n\n");
   #endif
-}
+} // end void doService(void)
+
 
 // ISR attribute for ESP32 "IRAM_ATTR"
 void ICACHE_RAM_ATTR serviceIsr(void){                    // timer interrupt service routine
-  doService();
-}
+  serviceRequest = true;        //######################semaphore, vermutlich nicht notwendig
+} // end serviceIsr(void)
 
 
 void wlanInit(void){
@@ -293,14 +295,14 @@ void wlanInit(void){
     #endif
     Udp.beginPacket(serverIpAddr, serverUdpPort);         // Udp.remoteIP() is not defind at this stage
     #ifdef CLIENT_ESP32
-      Udp.write((uint8_t *)CLIENT_HELLO_MSG, sizeof(CLIENT_HELLO_MSG));
+      Udp.printf(CLIENT_HELLO_MSG);
     #else //ESP8266
       Udp.write(CLIENT_HELLO_MSG);
     #endif
     Udp.endPacket();
 
     int packetSize = Udp.parsePacket();
-    if (packetSize){                                      // listening for reply
+    if (packetSize){                                      // listening for reply udp message
       if (!strcmp(Udp.remoteIP().toString().c_str(), serverIpAddr.toString().c_str())){ //check server address
         #ifdef DEBUG
           Serial.printf("wlanInit(): UDP packet received %d bytes from %s, port %d\n", packetSize, Udp.remoteIP().toString().c_str(), Udp.remotePort());
@@ -314,12 +316,12 @@ void wlanInit(void){
           #endif
           Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
           #ifdef CLIENT_ESP32
-            Udp.write((uint8_t *)CLIENT_REPLY_MSG, sizeof(CLIENT_REPLY_MSG));
+            Udp.printf(CLIENT_REPLY_MSG);
           #else //ESP8266
             Udp.write(CLIENT_REPLY_MSG);
           #endif
           Udp.endPacket();
-        }
+        } // end if(!strcmp(packetBuffer, SERVER_HELLO_MSG))
         states.wlanComplete = true;                             // WLAN connection is complete
         controlLed(CLIENT_RGB_BRIGHTNESS);                      // switch off WLAN LED to indicate that WLAN connection is complete (no more blinking)
         #ifdef DEBUG
@@ -330,8 +332,8 @@ void wlanInit(void){
           Serial.printf("wlanInit(): Received UDP packet from unexpected IP: %s, port %d\n",  Udp.remoteIP().toString().c_str(), Udp.remotePort());
         #endif
         states.wlanComplete = false;                            // wrong WLAN server address
-      }
-    }else{                                                // no UDP packet received yet
+      } // end if (!strcmp(Udp.remoteIP().toString().c_str()
+    }else{ // else of if (packetSize)                           // no UDP packet received yet
       #ifdef DEBUG
         Serial.printf("wlanInit(): No respond from server yet\n");
       #endif
@@ -343,6 +345,8 @@ void wlanInit(void){
       yield();*/
       controlLed(CLIENT_RGB_BRIGHTNESS);
     } //end if (packetSize)
+    if (serviceRequest == true)                                   //do service routine if isr has set the service flag
+      doService();
   }//end while(!states.wlanComplete)
 }//end void WlanInit()
 
@@ -417,6 +421,7 @@ static inline void initIo(void) {
   controlLed(CLIENT_RGB_BRIGHTNESS);              // set all LEDs
 }
 
+
 static inline void goSleep(){
   // LED shutdown
   for(int i = CLIENT_RGB_BRIGHTNESS; i > 0; i = i - 1){
@@ -424,34 +429,32 @@ static inline void goSleep(){
     delay(FAST_BLINK); 
   }
   digitalWrite(CLIENT_SLEEP_OUT, LOW);                 // switch off external power
-}
+} // end void goSleep()
+
 
 void setup(void) {
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                 // Setup Serial Interface with baud rate
   #endif
-
   initIo();
 
   //Setup timer interrup for service routines
   #ifdef CLIENT_ESP32
-    serviceTimer = timerBegin(1);                           //Timer ticks every second
-    timerAttachInterrupt(serviceTimer, &serviceIsr);        // Attach onTimer function to our timer. 
+    serviceTimer = timerBegin(1000000);                        // Set timer frequency to 1MHz
+    timerAttachInterrupt(serviceTimer, &serviceIsr);           // Attach onTimer function to our timer. 
     timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);// Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
-    //timerAlarmEnable(serviceTimer);
+    timerStart(serviceTimer);
   #else //ESP8266
     timer1_attachInterrupt(serviceIsr);
-    timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);          // DIV256 means one tick is 3.2us, total intervall time is 3.2us x SERVICE_INTERVALL, max is ~27 sec
-    timer1_write(SERVICE_INTERVALL);                        // has to start early, to allow the client to go to sleep, if the server is dead
+    timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);             // DIV256 means one tick is 3.2us, total intervall time is 3.2us x SERVICE_INTERVALL, max is ~27 sec
+    timer1_write(SERVICE_INTERVALL);                           // has to start early, to allow the client to go to sleep, if the server is dead
   #endif
 
   wlanInit();                                                // Init wlan communication with server
 } //end setup()
 
 
-
 void loop(void){
-
   //reconnect to server if connection got lost
    if (states.wlanComplete == false){
     #ifdef DEBUG
@@ -515,10 +518,10 @@ void loop(void){
     // receiving sleep message from server
     if (!strcmp(packetBuffer, SERVER_SLEEP_MSG)){
       #ifdef DEBUG
-        Serial.println("loop(): Detected sleep command\nGoing to deep sleep...");
+        Serial.println("loop(): Detected sleep command\nGoing to sleep...");
       #endif
       goSleep();
-
+      return;
     }
 
     // receiving alive message from server and resetting the alive counter
@@ -527,6 +530,7 @@ void loop(void){
         Serial.println("loop(): Detected server alive command\n");
       #endif
       server_alive_cnt = 0; //reset alive counter for server
+      return;
     }
 
     // receiving hello message from server
@@ -536,11 +540,12 @@ void loop(void){
       #endif
       Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
       #ifdef CLIENT_ESP32
-      Udp.write((uint8_t *)CLIENT_REPLY_MSG, sizeof(CLIENT_REPLY_MSG));
-    #else //ESP8266
-      Udp.write(CLIENT_REPLY_MSG);
-    #endif
-      Udp.endPacket();
+        Udp.printf(CLIENT_REPLY_MSG);
+      #else //ESP8266
+        Udp.write(CLIENT_REPLY_MSG);
+      #endif
+        Udp.endPacket();
+        return;
     }
     
     // receiving reply message from server and do nothing
@@ -548,6 +553,7 @@ void loop(void){
       #ifdef DEBUG
         Serial.println("loop(): Detected server reply message.");
       #endif
+      return;
     }
 
     // receiving HIGH acknowledge message from server
@@ -566,22 +572,23 @@ void loop(void){
         Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
         String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeHigh - bTimeHigh)); // pack end-time minus begin-time into a message
         #ifdef CLIENT_ESP32
-          Udp.write((uint8_t *)cycle_msg.c_str(), sizeof(cycle_msg.c_str()));
+           Udp.printf(cycle_msg.c_str());
         #else //ESP8266
           Udp.write(cycle_msg.c_str());
         #endif
         Udp.endPacket();
       #endif
+      return;
     }
 
-       //receiving LOW acknowledge message from server
-       if(!strcmp(packetBuffer, CLIENT_TOUCH_LOW_MSG)){
-       #ifdef DEBUG
-         Serial.println("loop(): Detected LOW acknowledge message from server.");
-       #endif
-       low_command_acknowledge = true;
-       ackCounterLow           = 0;
-       #ifdef CYCLETIME
+    //receiving LOW acknowledge message from server
+    if(!strcmp(packetBuffer, CLIENT_TOUCH_LOW_MSG)){
+      #ifdef DEBUG
+        Serial.println("loop(): Detected LOW acknowledge message from server.");
+      #endif
+      low_command_acknowledge = true;
+      ackCounterLow           = 0;
+      #ifdef CYCLETIME
           eTimeLow = asm_ccount();             //take end time for client to server to client cycle time measurement
         #ifdef DEBUG
           Serial.printf("loop(): Measured UDP cycle time for sensor LOW activation: %u ticks\n", ((uint32_t)(eTimeLow - bTimeLow)));
@@ -590,20 +597,24 @@ void loop(void){
         Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
         String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeLow - bTimeLow)); // pack end-time minus begin-time into a message
         #ifdef CLIENT_ESP32
-          Udp.write((uint8_t *)cycle_msg.c_str(), sizeof(cycle_msg.c_str()));
+            Udp.printf(cycle_msg.c_str());
         #else //ESP8266
           Udp.write(cycle_msg.c_str());
         #endif
         Udp.endPacket();
       #endif
+      return;
     }
-    /*
-    //receiving unknown message from server
+    
+    //receiving unknown UDP message
     #ifdef DEBUG
-      Serial.println("loop(): Detected unknown command");
+      Serial.println("loop(): Received unknown command by UDP");
+      Serial.println(packetBuffer);
     #endif
-    */
-   
   }//if (packetSize)
+
+  if (serviceRequest == true)        //do service routine if isr has set the service flag
+      doService();
+
 } //end loop()
 
