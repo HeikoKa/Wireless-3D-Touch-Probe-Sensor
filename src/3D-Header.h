@@ -1,7 +1,7 @@
 /**  Header
   *   
   *  @author Heiko Kalte  
-  *  @date 29.11.2024 
+  *  @date 12.01.2025 
   * 
   *  @version 0.2
   */
@@ -44,13 +44,14 @@ namespace CncSensor{
   const char*        password               = "123456789";              // WLAN password
 
   //server consts
-  const char*        SERVER_SLEEP_MSG       = "sleep";                  // UDP message from server to client to send client asleep
-  const char*        SERVER_HELLO_MSG       = "hello";                  // UDP message from server to client to say hello
-  const char*        SERVER_REPLY_MSG       = "reply";                  // UDP message from server to client to reply to hello msg
-  const char*        SERVER_ALIVE_MSG       = "alive";                  // UDP message from server to show server is alive  
-  const int          CLIENT_ALIVE_CNT_MAX   = 2;                        // maximum client alive counter value
-  const long         WIFI_RSSI_REPORT_LEVEL = -80;                      // RSSI level, WLAN signal strength e.g. -40 is better -70 is worse (best was -44)
-  const int          SERVER_TICKS_ARRAY_SIZE= 10;                       // Array Size of measured ticks
+  const char*        SERVER_SLEEP_MSG         = "sleep";                  // UDP message from server to client to send client asleep
+  const char*        SERVER_HELLO_MSG         = "hello";                  // UDP message from server to client to say hello
+  const char*        SERVER_REPLY_MSG         = "reply";                  // UDP message from server to client to reply to hello msg
+  const char*        SERVER_ALIVE_MSG         = "alive";                  // UDP message from server to show server is alive  
+  const int          CLIENT_ALIVE_CNT_MAX     = 2;                        // maximum client alive counter value
+  const long         WIFI_RSSI_REPORT_LEVEL   = -80;                      // RSSI level, WLAN signal strength e.g. -40 is better -70 is worse (best was -44)
+  const int          SERVER_TICKS_ARRAY_SIZE  = 10;                       // Array Size of measured ticks
+  const bool         SERVER_SLEEP_IN_POLARITY = true;                     // polarity of the Sleep in input (true = positiv polarity, false is negartiv polarity)
   #ifdef SERVER_ESP32
     const float      NANOSEC_PER_TICK       = 12.5;                     // ##############################number of nanosecond per measured tick in CCOUNT register
   #else
@@ -65,6 +66,7 @@ namespace CncSensor{
   const char*        CLIENT_ALIVE_MSG       = "alive";                  // UDP message from client alive
   const char*        CLIENT_RSSI_MSG        = "rssi";                   // UDP message from client with rssi (WLAN signal strength)
   const char*        CLIENT_CYCLE_MSG       = "CYC:";                   // UDP message from client to server to transmit the last measured cycle time ticks
+  const char*        CLIENT_INFO_MSG        = "INFO:";                  // UDP message from client to server with infos about the client
   const int          SERVER_ALIVE_CNT_MAX   = 2;                        // maximum server alive counter value, try to reconnect
   const int          SERVER_ALIVE_CNT_DEAD  = 3;                        // maximum server alive counter value, server seems to be dead
   const int          SERVER_AQUN_CNT_MAX    = 2000;                     // number of loop cycles before the server must acknowledge the high/low messages
@@ -74,10 +76,10 @@ namespace CncSensor{
   //client and server consts
   const uint32_t     SERVICE_INTERVALL       = 4000000;                 // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
   const uint32_t     SERVICE_INTERVALL_ESP32 = 20000000;                // ESP32 Time in 1MHz ticks between service interrupt calls (20000000 = 20sec)
-  const int          UDP_PACKET_MAX_SIZE     = 32;                      // UDP buffer size
+  const int          UDP_PACKET_MAX_SIZE     = 128;                     // UDP buffer size
   const uint8_t      SLOW_BLINK              = 1000;                    // delay for slow blinking LED
   const uint8_t      FAST_BLINK              = 500;                     // delay for fast blinking LED
-  const uint8_t      SERVER_RGB_BRIGHTNESS   = 5;                       // brightness of the RGB LED (max 255)
+  const uint8_t      RGB_FADE_SPEED          = 250;                     // speed for fading out the LED brightness when going to sleep 
   const uint8_t      CLIENT_RGB_BRIGHTNESS   = 5;                       // brightness of the RGB LED (max 255)
  
   //IP addresses

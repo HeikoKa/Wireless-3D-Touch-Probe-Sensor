@@ -1,14 +1,10 @@
-/**  serversendAliveMsg
+ /*  Server
   *   
   *  @author Heiko Kalte  
-  *  @date 20.04.2024 
-  * 
-  *  @version 0.2
+  *  @date 12.01.2025 
   */
-  //  0.1   initial version for ESP8266
-  //  0.2   added ESP32 support via #ifdef
 
-
+char *serverVersion = "V02.01";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +45,7 @@ WiFiUDP   Udp;                                              // UDP object
 int       rssi;
 bool      serviceRequest              = false;              // interrupt service can request a service intervall by this flag
 char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
+char      clientInfo[64];                                   // client info
 #ifdef SERVER_ESP32
   hw_timer_t *serviceTimer            = NULL;
 #endif
@@ -118,6 +115,9 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
     void handleRoot() {
         String message = "<h1>Webserver 3D Touch Probe</h1>";
         message += "<h3>by Heiko Kalte (h.kalte@gmx.de)</h3>";
+        message += "<p> Server SW version: ";
+        message += serverVersion;
+        message += "</p>";
         message += "<p>Server IP: ";
         message += serverIpAddr.toString().c_str();
         message += ", Port: ";
@@ -131,6 +131,11 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
         message += "<p>Number of connected clients: ";
         message += WiFi.softAPgetStationNum();
         message += "</p>";
+        #ifdef SERVER_ESP32
+          message += "<p>Server ESP32: yes</p>";
+        #else
+          message += "<p>Server ESP32: no</p>";
+        #endif
         #ifdef DEBUG
           message += "<p>Server DEBUG: yes</p>";
         #else
@@ -141,6 +146,9 @@ char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/out
         #else
           message += "<p>Server CYCLETIME: no</p>";
         #endif
+        message += "<p>Client Infos: ";
+        message += clientInfo;
+        message += "</p>";
      
         if (client_alive_counter < CLIENT_ALIVE_CNT_MAX)
           message += "<p>Client alive: yes</p>";
@@ -404,7 +412,7 @@ void setup(){
   pinMode(SERVER_ERROR_OUT,      OUTPUT);                        // Error Output, something is wrong, CNC should stop
   pinMode(SERVER_BAT_ALM_OUT,    OUTPUT);                        // Battery Alarm output to indicate to CNC input 
   pinMode(SERVER_SLEEP_LED,      OUTPUT);                        // Send Client to sleep LED
-  pinMode(SERVER_SLEEP_IN, INPUT_PULLUP);                        // Send Client to sleep external input
+  pinMode(SERVER_SLEEP_IN, INPUT_PULLUP);                        // Send Client to sleep external input ############# pullup kann eigentlich raus, da ein TRansistor am eingang ist
   
  //Initialize timer interrup for battery control
   #ifdef SERVER_ESP32
@@ -479,7 +487,7 @@ void loop(){
   } //if (WiFi)
 
   // send sleep message to client if the server input pin is low (CNC does not need the sensor in the next minutes)
-  if (digitalRead(SERVER_SLEEP_IN) == LOW){
+  if (((digitalRead(SERVER_SLEEP_IN) == LOW)&&(!SERVER_SLEEP_IN_POLARITY)) || ((digitalRead(SERVER_SLEEP_IN) == HIGH)&&(SERVER_SLEEP_IN_POLARITY))){
     digitalWrite(SERVER_SLEEP_LED,   LOW);                        // indicate sleep request by LED
     #ifdef DEBUG
       Serial.printf("loop(): CNC controller wants to send the client asleep\n");
@@ -619,6 +627,15 @@ void loop(){
       rssi = atoi(temp);
       #ifdef DEBUG
           Serial.printf("loop(): Received RSSI message from client: %d\n", rssi);
+      #endif
+      return;
+    }
+
+    //received client info message
+    if (!strncmp (packetBuffer, CLIENT_INFO_MSG, strlen(CLIENT_INFO_MSG))){    // decod the CLIENT_INFO_MSG prefix from the msg
+      char *temp = packetBuffer + strlen(CLIENT_INFO_MSG);                    // cut/decode the raw infos out of the client message
+      #ifdef DEBUG
+          Serial.printf("loop(): Received client info message: %s \n", temp);
       #endif
       return;
     }

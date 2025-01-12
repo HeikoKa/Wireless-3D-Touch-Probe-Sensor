@@ -14,7 +14,7 @@
   // man könnte die verschiedenen Errors batteryError, rssiError, touchStateError, aliveCounterError auch durch unterschiedliche Farben oder Blinken anzeigen
   // kann ESP8266 auch "Udp.printf(CLIENT_REPLY_MSG);" dann könnte man sich eine Unterscheidung sparen
 
-
+char *clientVersion = "V02.01";
 #include <WiFiUdp.h>
 #include <Ticker.h>
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
@@ -74,6 +74,7 @@ statesType states;
   Adafruit_NeoPixel pixels(1, CLIENT_RGB_LED_OUT, NEO_GRB + NEO_KHZ800);
 #endif
 
+
  static inline void doSensorHigh(void){
   String high_msg;
   //digitalWrite(CLIENT_TOUCH_LED, LOW);                           // ########statt controlLed##############indicate the current touch state by LED output
@@ -99,6 +100,7 @@ statesType states;
       #endif
   } // end if (states.wlanComplete)
 } // end void doSensorHigh(void)
+
 
 static inline void doSensorLow(void){
   String low_msg;
@@ -246,6 +248,7 @@ static inline void sendAliveMsg(void) {
   Udp.endPacket();
 } // end void sendAliveMsg(void)
 
+
 static inline void doService(void){
   // Does all service activities that are called regularly by timer interrupt
   #ifdef DEBUG
@@ -348,6 +351,34 @@ void wlanInit(void){
     if (serviceRequest == true)                                   //do service routine if isr has set the service flag
       doService();
   }//end while(!states.wlanComplete)
+  //Send infos about client
+  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+  String cycle_msg = CLIENT_INFO_MSG;
+  #ifdef CLIENT_ESP32
+   cycle_msg += String("ESP32; ");
+  #else
+   cycle_msg += String("ESP8266; ");
+  #endif
+  #ifdef DEBUG
+   cycle_msg += String("DEBUG; ");
+  #else
+   cycle_msg += String("NO DEBUG; ");
+  #endif
+  #ifdef CYCLETIME
+   cycle_msg += String("CYCLETIME; ");
+  #else
+   cycle_msg += String("NO CYCLETIME; ");
+  #endif
+  cycle_msg += clientVersion;
+  #ifdef DEBUG
+    Serial.printf("wlanInit(): Sending UDP message with client infos: %s\n", cycle_msg.c_str());
+  #endif
+  #ifdef CLIENT_ESP32
+    Udp.printf(cycle_msg.c_str());
+  #else //ESP8266
+    Udp.write(cycle_msg.c_str());
+  #endif
+  Udp.endPacket();
 }//end void WlanInit()
 
 
@@ -424,9 +455,9 @@ static inline void initIo(void) {
 
 static inline void goSleep(){
   // LED shutdown
-  for(int i = CLIENT_RGB_BRIGHTNESS; i > 0; i = i - 1){
+  for(int i = CLIENT_RGB_BRIGHTNESS; i >= 0; i = i - 1){
     controlLed(i);
-    delay(FAST_BLINK); 
+    delay(RGB_FADE_SPEED);
   }
   digitalWrite(CLIENT_SLEEP_OUT, LOW);                 // switch off external power
 } // end void goSleep()
