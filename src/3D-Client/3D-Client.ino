@@ -13,6 +13,7 @@
   //TODO
   // man könnte die verschiedenen Errors batteryError, rssiError, touchStateError, aliveCounterError auch durch unterschiedliche Farben oder Blinken anzeigen
   // kann ESP8266 auch "Udp.printf(CLIENT_REPLY_MSG);" dann könnte man sich eine Unterscheidung sparen
+  // Im Server die Zustände zurücksetzen, wenn WLAN verloren ging
 
 char *clientVersion = "V02.01";
 #include <WiFiUdp.h>
@@ -57,6 +58,7 @@ statesType states;
 
 #ifdef CLIENT_ESP32
   hw_timer_t *serviceTimer = NULL;
+  portMUX_TYPE timerMux               = portMUX_INITIALIZER_UNLOCKED;
 #endif
 
 #ifdef CYCLETIME
@@ -252,23 +254,35 @@ static inline void sendAliveMsg(void) {
 static inline void doService(void){
   // Does all service activities that are called regularly by timer interrupt
   #ifdef DEBUG
-    Serial.printf("\ndoService(): start service\n");
+    Serial.printf("\ndoService(): ***** start service *****\n");
   #endif
   checkBatteryVoltage();                                  // check battery in service
   checkAliveCounter();                                    // check server alive counter in service
   sendAliveMsg();                                         // send client alive in service
   checkWlanStatus();                                      // check WLAN status and signal strength
   controlLed(CLIENT_RGB_BRIGHTNESS);                      // set the red error LED
-  serviceRequest = false;                                 // reset service flag after service
+  #ifdef CLIENT_ESP32
+    portENTER_CRITICAL_ISR(&timerMux);                 // protect access to serviceRequest 
+  #endif
+    serviceRequest = false;                                 // reset service flag after service
+  #ifdef CLIENT_ESP32
+    portEXIT_CRITICAL_ISR(&timerMux);                  // release protection of data
+  #endif
   #ifdef DEBUG
-    Serial.printf("doService(): end\n\n");
+    Serial.printf("doService(): ***** end service *****\n\n");
   #endif
 } // end void doService(void)
 
 
 // ISR attribute for ESP32 "IRAM_ATTR"
 void ICACHE_RAM_ATTR serviceIsr(void){                    // timer interrupt service routine
-  serviceRequest = true;        //######################semaphore, vermutlich nicht notwendig
+  #ifdef CLIENT_ESP32
+    portENTER_CRITICAL_ISR(&timerMux);                    // protect access to serviceRequest 
+  #endif
+    serviceRequest = true;
+  #ifdef CLIENT_ESP32
+    portEXIT_CRITICAL_ISR(&timerMux);                     // release protection of data
+  #endif
 } // end serviceIsr(void)
 
 
@@ -282,6 +296,8 @@ void wlanInit(void){
   WiFi.begin(SSID, password);                             // connect to WLAN 
   while (WiFi.status() != WL_CONNECTED){                  // stay in this loop until a WLAN connection could be established
     controlLed(CLIENT_RGB_BRIGHTNESS);                    // blink WLAN LED until WLAN is established 
+    delay(WLAN_INIT_PAUSE); 
+    yield();
     #ifdef DEBUG
       Serial.print(".");
     #endif
@@ -383,6 +399,7 @@ void wlanInit(void){
 
 
 void controlLed(uint8_t brightness) {
+  // brightness is currently only used in RGB mode 
   #ifdef CLIENT_RGB_LED   // one RGB LED for all states
     if(states.touchState){  // current touch state has LED Priority over all other LEDs
       pixels.setPixelColor(0, pixels.Color(0, 0, brightness)); // Blue rgb(0,0,255)
@@ -466,6 +483,7 @@ static inline void goSleep(){
 void setup(void) {
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                 // Setup Serial Interface with baud rate
+    Serial.println("setup(): I am the 3D Touch Probe Sensor Client");
   #endif
   initIo();
 
@@ -558,7 +576,7 @@ void loop(void){
     // receiving alive message from server and resetting the alive counter
     if(!strcmp(packetBuffer, SERVER_ALIVE_MSG)){
       #ifdef DEBUG
-        Serial.println("loop(): Detected server alive command\n");
+        Serial.println("loop(): Detected server alive command");
       #endif
       server_alive_cnt = 0; //reset alive counter for server
       return;

@@ -36,18 +36,19 @@ using namespace CncSensor;
 // beide rote LEDs
 
 
-int       clientBatteryStatus        = CLIENT_BAT_OK;       // init with battery is ok
-float     clientBateryVoltage        = 0.0;                 // client voltage
-bool      wlan_complete              = false;               // global variable to indicate if wlan connection is established completely 
-bool      msg_lost                   = false;               // did a UDP message got lost
-int       client_alive_counter       = 0;                   // client alive counter
-WiFiUDP   Udp;                                              // UDP object
-int       rssi;
-bool      serviceRequest              = false;              // interrupt service can request a service intervall by this flag
-char      packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
-char      clientInfo[64];                                   // client info
+int           clientBatteryStatus        = CLIENT_BAT_OK;       // init with battery is ok
+float         clientBateryVoltage        = 0.0;                 // client voltage
+bool          wlan_complete              = false;               // global variable to indicate if wlan connection is established completely 
+bool          msg_lost                   = false;               // did a UDP message got lost
+int           client_alive_counter       = 0;                   // client alive counter
+WiFiUDP       Udp;                                              // UDP object
+int           rssi;
+volatile bool serviceRequest             = false;               // interrupt service can request a service intervall by this flag
+char          packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
+char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info
 #ifdef SERVER_ESP32
   hw_timer_t *serviceTimer            = NULL;
+  portMUX_TYPE timerMux               = portMUX_INITIALIZER_UNLOCKED;
 #endif
 
 #ifdef CYCLETIME
@@ -270,22 +271,33 @@ static inline void checkClientStatus(){
 
 static inline void doService(){
   #ifdef DEBUG
-    Serial.printf("\ndoService(): start service\n");
+    Serial.printf("\ndoService(): ***** start service *****\n");
   #endif
     sendAliveMsg();                                       // send regular alive messages to client
     checkClientStatus();                                  // check regularly client status
     digitalWrite(SERVER_SLEEP_LED, HIGH);                 // if server requested client to go to sleep, switch off Sleep LED with this service 
   #ifdef DEBUG
-    Serial.printf("doService(): end service\n\n");
+    Serial.printf("doService(): ***** end service *****\n\n");
+  #endif
+  #ifdef SERVER_ESP32
+    portENTER_CRITICAL_ISR(&timerMux);                      // protect acces to "serviceRequest"
   #endif
   serviceRequest = false;                                 //reset service flag
+  #ifdef SERVER_ESP32
+    portEXIT_CRITICAL_ISR(&timerMux);                       // release protection of "serviceRequest"
+  #endif
 }
 
 
 //void ICACHE_RAM_ATTR serviceIsr(){                        // timer interrupt for regular service
 void IRAM_ATTR  serviceIsr(){                        // timer interrupt for regular service
-  //############################################## service Request schützen?
-  serviceRequest = true;        //exit isr as quickly as possible and start service routine in main loop
+  #ifdef SERVER_ESP32
+    portENTER_CRITICAL_ISR(&timerMux);                 // protect access to serviceRequest 
+  #endif
+  serviceRequest = true;                             // exit isr as quickly as possible and start service routine in main loop
+  #ifdef SERVER_ESP32
+    portEXIT_CRITICAL_ISR(&timerMux);                  // release protection of data
+  #endif
 }
 
 
@@ -403,6 +415,7 @@ void wlanInit(){
 void setup(){
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                     // Setup Serial Interface with baud rate
+    Serial.println("setup(): I am the 3D Touch Probe Sensor Server");
   #endif
 
   //initialize digital input/output pins
@@ -452,7 +465,7 @@ void setup(){
       server.onNotFound(handleNotFound);                  // When a client requests an unknown URI (i.e. something other than "/"), call function "handleNotFound"
       server.begin();
       #ifdef DEBUG
-        Serial.println("setup(): HTTP server started");
+        Serial.println("setup(): HTTP Webserver started");
       #endif
     #endif
 
@@ -487,7 +500,7 @@ void loop(){
   } //if (WiFi)
 
   // send sleep message to client if the server input pin is low (CNC does not need the sensor in the next minutes)
-  if (((digitalRead(SERVER_SLEEP_IN) == LOW)&&(!SERVER_SLEEP_IN_POLARITY)) || ((digitalRead(SERVER_SLEEP_IN) == HIGH)&&(SERVER_SLEEP_IN_POLARITY))){
+  if (((digitalRead(SERVER_SLEEP_IN) == HIGH)&&(!SERVER_SLEEP_IN_POLARITY)) || ((digitalRead(SERVER_SLEEP_IN) == LOW)&&(SERVER_SLEEP_IN_POLARITY))){
     digitalWrite(SERVER_SLEEP_LED,   LOW);                        // indicate sleep request by LED
     #ifdef DEBUG
       Serial.printf("loop(): CNC controller wants to send the client asleep\n");
@@ -512,7 +525,7 @@ void loop(){
     //received client sensor high command
     if (!strncmp (packetBuffer, CLIENT_TOUCH_HIGH_MSG, strlen(CLIENT_TOUCH_HIGH_MSG))){
       digitalWrite(SERVER_TOUCH_OUT, LOW);                                              // indicate current touch state by LED
-      char *highMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_HIGH_MSG);        // cut/decode additional information out of the client message
+      char *highMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_HIGH_MSG);        // ##################was macht das für einen Sinn, die string länge an den String zu hängen ###############cut/decode additional information out of the client message
       if (!strncmp (highMsgAttach, "1", strlen("1")))
         msg_lost = true;
       #ifdef DEBUG
@@ -632,10 +645,12 @@ void loop(){
     }
 
     //received client info message
-    if (!strncmp (packetBuffer, CLIENT_INFO_MSG, strlen(CLIENT_INFO_MSG))){    // decod the CLIENT_INFO_MSG prefix from the msg
+    if (!strncmp (packetBuffer, CLIENT_INFO_MSG, strlen(CLIENT_INFO_MSG))){    // decode the CLIENT_INFO_MSG prefix from the msg
       char *temp = packetBuffer + strlen(CLIENT_INFO_MSG);                    // cut/decode the raw infos out of the client message
+      //clientInfo = packetBuffer + strlen(CLIENT_INFO_MSG);                   // cut/decode the raw infos out of the client message
+      strcpy(clientInfo, temp);
       #ifdef DEBUG
-          Serial.printf("loop(): Received client info message: %s \n", temp);
+          Serial.printf("loop(): Received client info message: %s \n", clientInfo);
       #endif
       return;
     }

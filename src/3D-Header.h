@@ -30,9 +30,9 @@
 #define WEBSERVER            // enable webserver
 
 // client specific defines
-#define CLIENT_ESP32         // defines client as a ESP32 (Waveshare ESP32-S3-Zero)instead of a ESP8266, comment out to switch to ESP8266
-#define CLIENT_RGB_LED       // do you have multiple LEDs or just ohne RGB LED
-//## user defines end ##
+//#define CLIENT_ESP32         // defines client as a ESP32 (Waveshare ESP32-S3-Zero)instead of a ESP8266, comment out to switch to ESP8266
+//#define CLIENT_RGB_LED       // do you have multiple LEDs or just ohne RGB LED
+////## user defines end ##
 
 
 #include "IPAddress.h"
@@ -74,12 +74,14 @@ namespace CncSensor{
 
 
   //client and server consts
-  const uint32_t     SERVICE_INTERVALL       = 4000000;                 // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
-  const uint32_t     SERVICE_INTERVALL_ESP32 = 20000000;                // ESP32 Time in 1MHz ticks between service interrupt calls (20000000 = 20sec)
+  const uint32_t     SERVICE_INTERVALL       = 4615385;     //~15sec     // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
+  const uint32_t     SERVICE_INTERVALL_ESP32 = 15000000;                // ESP32 Time in 1MHz ticks between service interrupt calls (20000000 = 20sec)
   const int          UDP_PACKET_MAX_SIZE     = 128;                     // UDP buffer size
   const uint8_t      SLOW_BLINK              = 1000;                    // delay for slow blinking LED
   const uint8_t      FAST_BLINK              = 500;                     // delay for fast blinking LED
-  const uint8_t      RGB_FADE_SPEED          = 250;                     // speed for fading out the LED brightness when going to sleep 
+  const uint8_t      RGB_FADE_SPEED          = 250;                     // speed for fading out the LED brightness when going to sleep
+  const uint8_t      WLAN_INIT_PAUSE         = 100;                     // Pause length durch WLAN initiation
+
   const uint8_t      CLIENT_RGB_BRIGHTNESS   = 5;                       // brightness of the RGB LED (max 255)
  
   //IP addresses
@@ -159,7 +161,7 @@ namespace CncSensor{
     #endif
     const uint8_t     CLIENT_TOUCH_IN         = 12;                   // (D6) digital input pin to listen
     const uint8_t     CLIENT_SLEEP_OUT        = 14;                   // (D5) controls external sleep hardware
-    const uint8_t     CLIENT_CHARGE_IN        = 7;                    // Battery Charging Input
+    const uint8_t     CLIENT_CHARGE_IN        = 13;                   // (D7) Battery Charging Input
 
   #endif //ifdef CLIENT_ESP32
 }  // namespace CncSensor
