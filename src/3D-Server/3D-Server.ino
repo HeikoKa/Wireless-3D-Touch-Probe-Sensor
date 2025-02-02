@@ -303,7 +303,7 @@ void IRAM_ATTR  serviceIsr(){                        // timer interrupt for regu
 
 void wlanInit(){
   #ifdef DEBUG
-    Serial.printf("\n\nwlanInit(): Soft-AP server IP: ");
+    Serial.printf("\nwlanInit(): Soft-AP server IP: ");
     serverIpAddr = WiFi.softAPIP();                       // the server IP is set earlier, so WIFI.softAPIP() should not result in a different IP
     Serial.println(serverIpAddr);
   #endif

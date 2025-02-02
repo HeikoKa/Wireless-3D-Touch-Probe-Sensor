@@ -471,12 +471,21 @@ static inline void initIo(void) {
 
 
 static inline void goSleep(){
-  // LED shutdown
-  for(int i = CLIENT_RGB_BRIGHTNESS; i >= 0; i = i - 1){
-    controlLed(i);
-    delay(RGB_FADE_SPEED);
+  if (!((NO_SLEEP_WHILE_CHARGING) && (digitalRead(CLIENT_CHARGE_IN) == LOW))){   // prevent goint to sleep if battery is charging and the NO_SLEEP_WHILE_CHARGING flag is set
+    #ifdef DEBUG
+      Serial.println("goSleep(): Going to sleep");
+    #endif
+    // LED shutdown
+    for(int i = CLIENT_RGB_BRIGHTNESS; i >= 0; i = i - 1){
+      controlLed(i);
+      delay(RGB_FADE_SPEED);
+    }
+    digitalWrite(CLIENT_SLEEP_OUT, LOW);                 // switch off external power
+  }else{
+  #ifdef DEBUG
+    Serial.println("goSleep(): Not going to sleep while charging");
+  #endif
   }
-  digitalWrite(CLIENT_SLEEP_OUT, LOW);                 // switch off external power
 } // end void goSleep()
 
 

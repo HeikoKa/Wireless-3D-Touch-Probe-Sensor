@@ -71,7 +71,7 @@ namespace CncSensor{
   const int          SERVER_ALIVE_CNT_DEAD  = 3;                        // maximum server alive counter value, server seems to be dead
   const int          SERVER_AQUN_CNT_MAX    = 2000;                     // number of loop cycles before the server must acknowledge the high/low messages
   const int          TOUCH_PIN_DEBOUNCE     = 700;                      // debounce time in µs for touch input pin
-
+  const bool         NO_SLEEP_WHILE_CHARGING = true;                     // prevent sleep during battery loading
 
   //client and server consts
   const uint32_t     SERVICE_INTERVALL       = 4615385;     //~15sec     // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
