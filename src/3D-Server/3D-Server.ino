@@ -1,10 +1,10 @@
  /*  Server
   *   
   *  @author Heiko Kalte  
-  *  @date 12.01.2025 
+  *  @date 08.02.2025 
   */
 
-char *serverVersion = "V02.01";
+char *serverVersion = "V02.02";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,10 +31,7 @@ char *serverVersion = "V02.01";
 using namespace CncSensor;
 
 //TODOs
-// check ESP32 interrupt handling
 // are round trip tick measurement for ESP32 the same time?
-// beide rote LEDs
-
 
 int           clientBatteryStatus        = CLIENT_BAT_OK;       // init with battery is ok
 float         clientBateryVoltage        = 0.0;                 // client voltage
@@ -43,6 +40,7 @@ bool          msg_lost                   = false;               // did a UDP mes
 int           client_alive_counter       = 0;                   // client alive counter
 WiFiUDP       Udp;                                              // UDP object
 int           rssi;
+int           serverHwPcbVersion         = 0;                   // drom PCB version 3 on the version can be read out from the PCB coded by 3 input bit
 volatile bool serviceRequest             = false;               // interrupt service can request a service intervall by this flag
 char          packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
 char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info
@@ -118,6 +116,9 @@ char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info
         message += "<h3>by Heiko Kalte (h.kalte@gmx.de)</h3>";
         message += "<p> Server SW version: ";
         message += serverVersion;
+        message += "</p>";
+        message += "<p> Server Shardware PCB version: ";
+        message += serverHwPcbVersion;
         message += "</p>";
         message += "<p>Server IP: ";
         message += serverIpAddr.toString().c_str();
@@ -240,8 +241,10 @@ static inline void checkClientStatus(){
       #ifdef DEBUG
          Serial.printf("checkClientStatus(): Client battery is low\n");
       #endif
-      digitalWrite(SERVER_BAT_ALM_OUT, LOW);
-      //digitalWrite(SERVER_ERROR_OUT, HIGH);
+      digitalWrite(SERVER_BAT_ALM_LED, LOW);
+      #ifdef SERVER_HW_REVISION_3_0
+        digitalWrite(SERVER_BAT_ALM_OUT, HIGH != SERVER_BAT_ALM_OUT_POLARITY);  // indicated battery low to CNC controller 
+      #endif
     }
 
     // check if client battery critical
@@ -249,8 +252,10 @@ static inline void checkClientStatus(){
       #ifdef DEBUG
         Serial.printf("checkClientStatus(): Client battery is critical\n");
       #endif
-      digitalWrite(SERVER_BAT_ALM_OUT, LOW);
-      //digitalWrite(SERVER_ERROR_OUT, LOW);
+      digitalWrite(SERVER_BAT_ALM_LED, LOW);
+      #ifdef SERVER_HW_REVISION_3_0
+        digitalWrite(SERVER_BAT_ALM_OUT, HIGH != SERVER_BAT_ALM_OUT_POLARITY);  // indicated critical bat to CNC controller 
+      #endif
     }
 
     // check if client battery ok
@@ -258,8 +263,10 @@ static inline void checkClientStatus(){
       #ifdef DEBUG
         Serial.printf("checkClientStatus(): Client battery is ok\n");
       #endif
-      digitalWrite(SERVER_BAT_ALM_OUT, HIGH);
-      //digitalWrite(SERVER_ERROR_OUT, HIGH);
+      digitalWrite(SERVER_BAT_ALM_LED, HIGH);
+      #ifdef SERVER_HW_REVISION_3_0
+        digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY);  // indicated good bat to CNC controller 
+      #endif
     }  
   }else{   //if(wlan_complete)
     #ifdef DEBUG
@@ -323,17 +330,20 @@ void wlanInit(){
       delay(SLOW_BLINK);
       neopixelWrite(SERVER_WLAN_LED,0,0,0); // LED Off 
       delay(SLOW_BLINK);
-    #else //normal LED
+    #else //normal LED   ################# hier muss auch eine fallunterscheidung zwischen 3.0 und früher gemacht werden
       digitalWrite(SERVER_WLAN_LED, HIGH);                         // switch off WLAN connection LED
       //do not blink LED to avoid false detection by CNC Controller
       //delay(SLOW_BLINK); 
       //digitalWrite(SERVER_WLAN_LED, LOW);                        // switch on WLAN connection LED
-      delay(SLOW_BLINK);      //################################# kann das raus
+      delay(SLOW_BLINK);      //################################# 
     #endif
     yield();
     if (serviceRequest == true)        //do service routine if isr has set the service flag
       doService();
   } //waiting for clients to connect either 3D touch probe client or a webbrowser if webserver is enabled
+  #ifdef SERVER_HW_REVISION_3_0
+    digitalWrite(SERVER_WLAN_OUT, HIGH != SERVER_WLAN_OUT_POLARITY);  // successful WLAN establishing is indicated to CNC controller 
+  #endif
 
   #ifdef DEBUG
     Serial.println("Ready");
@@ -387,6 +397,9 @@ void wlanInit(){
         #else
           digitalWrite(SERVER_WLAN_LED, LOW);                        // switch on WLAN connection LED to indicate sucessfull connection
       #endif
+      #ifdef SERVER_HW_REVISION_3_0
+        digitalWrite(SERVER_WLAN_OUT, HIGH != SERVER_WLAN_OUT_POLARITY);  // successful WLAN establishing is indicated to CNC controller 
+      #endif
       #ifdef DEBUG
         Serial.print("wlanInit(): WLAN is complete\n");
       #endif
@@ -400,6 +413,9 @@ void wlanInit(){
           digitalWrite(SERVER_WLAN_LED, HIGH);                       // switch off WLAN connection LED
           //Do not blink WLAN LED to avoid false detection by CNC controller
           delay(FAST_BLINK);          // ############################## kann das raus, verzögert das nur unnötig die WLAN Verbindung
+      #endif
+      #ifdef SERVER_HW_REVISION_3_0
+        digitalWrite(SERVER_WLAN_OUT, LOW != SERVER_WLAN_OUT_POLARITY);  // idicate missing WLAN connection to CNC controller 
       #endif
       yield(); 
     } //if (packetSize)
@@ -421,13 +437,27 @@ void setup(){
   //initialize digital input/output pins
   pinMode(SERVER_POWER_LED,      OUTPUT);                        // LED to show power is on
   pinMode(SERVER_WLAN_LED,       OUTPUT);                        // LED to show WLAN connection state
-  pinMode(SERVER_TOUCH_OUT,      OUTPUT);                        // Touch Output indicated the client has detected something
-  pinMode(SERVER_ERROR_OUT,      OUTPUT);                        // Error Output, something is wrong, CNC should stop
-  pinMode(SERVER_BAT_ALM_OUT,    OUTPUT);                        // Battery Alarm output to indicate to CNC input 
+  pinMode(SERVER_TOUCH_LED,      OUTPUT);                        // Touch Output indicated the client has detected something
+  pinMode(SERVER_ERROR_LED,      OUTPUT);                        // Error Output, something is wrong, CNC should stop
+  pinMode(SERVER_BAT_ALM_LED,    OUTPUT);                        // Battery Alarm output to indicate to CNC input 
   pinMode(SERVER_SLEEP_LED,      OUTPUT);                        // Send Client to sleep LED
-  pinMode(SERVER_SLEEP_IN, INPUT_PULLUP);                        // Send Client to sleep external input ############# pullup kann eigentlich raus, da ein TRansistor am eingang ist
+  pinMode(SERVER_SLEEP_IN, INPUT_PULLUP);                        // Send Client to sleep external input
   
- //Initialize timer interrup for battery control
+  pinMode(SERVER_HW_REVISON_0, INPUT);                        // server/basestation hardware PCB revisio bit 0
+  pinMode(SERVER_HW_REVISON_1, INPUT);                        // server/basestation hardware PCB revisio bit 1
+  pinMode(SERVER_HW_REVISON_2, INPUT);                        // server/basestation hardware PCB revisio bit 2
+
+  #ifdef SERVER_HW_REVISION_3_0
+  //hardware version 3.0 utilizes two outputs one to control the LED and one to control the output to the CNC controller
+    pinMode(SERVER_WLAN_OUT,      OUTPUT);                        // TBD
+    pinMode(SERVER_TOUCH_OUT,     OUTPUT);                        // TBD
+    pinMode(SERVER_ERROR_OUT,     OUTPUT);                        // TBD
+    pinMode(SERVER_BAT_ALM_OUT,   OUTPUT);                        // TBD
+  #endif
+
+  serverHwPcbVersion = (digitalRead(SERVER_HW_REVISON_2) << 2) + (digitalRead(SERVER_HW_REVISON_1)<< 1) + digitalRead(SERVER_HW_REVISON_0); //construct version number from 3 input bit
+  
+  //Initialize timer interrup for battery control
   #ifdef SERVER_ESP32
     serviceTimer = timerBegin(1000000);                          // Set timer frequency to 1MHz
     timerAttachInterrupt(serviceTimer, &serviceIsr);             // Attach onTimer function to our timer. 
@@ -439,16 +469,23 @@ void setup(){
     timer1_write(SERVICE_INTERVALL);                             // Setup serice intervall
   #endif
   
-
-  //write default values of digital outputs
+  //write default values of digital outputs for LEDs
   digitalWrite(SERVER_POWER_LED,   LOW);                         // switch on power LED
-  //############ ESP32 RGB LED?
   digitalWrite(SERVER_WLAN_LED,    HIGH);                        // switch off WLAN connection LED
-  digitalWrite(SERVER_TOUCH_OUT,   HIGH);                        // switch off tough output
-  digitalWrite(SERVER_ERROR_OUT,   HIGH);                        // switch off error output
-  digitalWrite(SERVER_BAT_ALM_OUT, HIGH);                        // switch off error output
-  digitalWrite(SERVER_SLEEP_LED,   HIGH);                        // switch off sleep output
+  digitalWrite(SERVER_TOUCH_LED,   HIGH);                        // switch off touch LED
+  digitalWrite(SERVER_ERROR_LED,   HIGH);                        // switch off general error LED
+  digitalWrite(SERVER_BAT_ALM_LED, HIGH);                        // switch off battery error/low LED
+  digitalWrite(SERVER_SLEEP_LED,   HIGH);                        // switch off sleep request LED
   
+  #ifdef SERVER_HW_REVISION_3_0
+  //write default values of digital outputs to CNC controller
+  //from hardware version 3.0 two outputs are utilized, one to control the LED and one to control the output to the CNC controller
+   digitalWrite(SERVER_WLAN_OUT,      LOW != SERVER_WLAN_OUT_POLARITY);                        // #################### it die logic richtig?
+   digitalWrite(SERVER_TOUCH_OUT,     LOW != SERVER_TOUCH_OUT_POLARITY);                       // TBD
+   digitalWrite(SERVER_ERROR_OUT,     LOW != SERVER_ERROR_OUT_POLARITY);                // TBD
+   digitalWrite(SERVER_BAT_ALM_OUT,   LOW != SERVER_BAT_ALM_OUT_POLARITY);              // TBD
+  #endif
+
   //Setup Soft-AP
   #ifdef DEBUG
       Serial.print("setup(): Setting Soft-AP...");
@@ -474,7 +511,10 @@ void setup(){
     #ifdef DEBUG
       Serial.println("Failed!");
     #endif
-    digitalWrite(SERVER_ERROR_OUT, LOW);                         //switch on error output
+    digitalWrite(SERVER_ERROR_LED, LOW);                         //switch on error LED
+    #ifdef SERVER_HW_REVISION_3_0
+      digitalWrite(SERVER_ERROR_OUT, HIGH != SERVER_ERROR_OUT_POLARITY);  // successful WLAN establishing is indicated to CNC controller 
+    #endif
   } // end if(result == true)
 } //end setup() 
 
@@ -524,7 +564,10 @@ void loop(){
 
     //received client sensor high command
     if (!strncmp (packetBuffer, CLIENT_TOUCH_HIGH_MSG, strlen(CLIENT_TOUCH_HIGH_MSG))){
-      digitalWrite(SERVER_TOUCH_OUT, LOW);                                              // indicate current touch state by LED
+      digitalWrite(SERVER_TOUCH_LED, LOW);                                              // indicate current touch state by LED
+      #ifdef SERVER_HW_REVISION_3_0
+        digitalWrite(SERVER_TOUCH_OUT, HIGH != SERVER_TOUCH_OUT_POLARITY);  // indicate touch high to CNC controller 
+      #endif
       char *highMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_HIGH_MSG);        // ##################was macht das für einen Sinn, die string länge an den String zu hängen ###############cut/decode additional information out of the client message
       if (!strncmp (highMsgAttach, "1", strlen("1")))
         msg_lost = true;
@@ -543,7 +586,10 @@ void loop(){
 
     //received client sensor low command
     if (!strncmp (packetBuffer, CLIENT_TOUCH_LOW_MSG, strlen(CLIENT_TOUCH_LOW_MSG))){
-      digitalWrite(SERVER_TOUCH_OUT, HIGH);
+      digitalWrite(SERVER_TOUCH_LED, HIGH);
+      #ifdef SERVER_HW_REVISION_3_0
+        digitalWrite(SERVER_TOUCH_OUT, LOW != SERVER_TOUCH_OUT_POLARITY);  // indicate touch low to CNC controller 
+      #endif
       char *lowMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_LOW_MSG);        // cut/decode additional information out of the client message
       if (!strncmp (lowMsgAttach, "1", strlen("1")))
         msg_lost = true;

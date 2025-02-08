@@ -15,7 +15,6 @@
 //TODOs
 //is NANOSEC_PER_TICK for ESP32 the same as for ESP8266?
 
-
 #ifndef CNCSENSOR_H_
 #define CNCSENSOR_H_
 
@@ -25,23 +24,23 @@
 #define CYCLETIME             // enable measuring the round trip delay from client to server back to client
 
 // server specific defines
-#define SERVER_ESP32         // defines server as a ESP32 instead of a ESP8266, comment out to switch to ESP8266
-//#define SERVER_RGB_LED       // do you have multiple LEDs or just ohne RGB LED
-#define WEBSERVER            // enable webserver
+#define SERVER_ESP32            // defines server as a ESP32 instead of a ESP8266, comment out to switch to ESP8266
+#define SERVER_HW_REVISION_3_0  // set this define if basestation/server is hardware revision 3.0
+#define WEBSERVER               // enable webserver
 
 // client specific defines
 //#define CLIENT_ESP32         // defines client as a ESP32 (Waveshare ESP32-S3-Zero)instead of a ESP8266, comment out to switch to ESP8266
 //#define CLIENT_RGB_LED       // do you have multiple LEDs or just ohne RGB LED
-////## user defines end ##
+//## user defines end ##
 
 
 #include "IPAddress.h"
 
 namespace CncSensor{
  
-  const int          BAUD_RATE              = 9600;                     // Baud rate for serial outputs/debug
-  const char*        SSID                   = "3D-Touch-WIFI";          // WLAN network name
-  const char*        password               = "123456789";              // WLAN password
+  const int          BAUD_RATE                = 9600;                     // Baud rate for serial outputs/debug
+  const char*        SSID                     = "3D-Touch-WIFI";          // WLAN network name
+  const char*        password                 = "123456789";              // WLAN password
 
   //server consts
   const char*        SERVER_SLEEP_MSG         = "sleep";                  // UDP message from server to client to send client asleep
@@ -51,30 +50,34 @@ namespace CncSensor{
   const int          CLIENT_ALIVE_CNT_MAX     = 2;                        // maximum client alive counter value
   const long         WIFI_RSSI_REPORT_LEVEL   = -80;                      // RSSI level, WLAN signal strength e.g. -40 is better -70 is worse (best was -44)
   const int          SERVER_TICKS_ARRAY_SIZE  = 10;                       // Array Size of measured ticks
-  const bool         SERVER_SLEEP_IN_POLARITY = true;                     // polarity of the Sleep in input (true = positiv polarity, false is negartiv polarity)
+  const bool         SERVER_SLEEP_IN_POLARITY    = false;                 //########## muss anders polarity of the "Sleep in" input. True = positiv polarity (high input send sensor aleep); false = negativ polarity (low input send asleep)
+  const bool         SERVER_WLAN_OUT_POLARITY    = true;                  // (works only with PCB version 3 or later) false does not invert polarity, high level means aktive
+  const bool         SERVER_TOUCH_OUT_POLARITY   = true;
+  const bool         SERVER_ERROR_OUT_POLARITY   = true;
+  const bool         SERVER_BAT_ALM_OUT_POLARITY = true;
   #ifdef SERVER_ESP32
-    const float      NANOSEC_PER_TICK       = 12.5;                     // ##############################number of nanosecond per measured tick in CCOUNT register
+    const float      NANOSEC_PER_TICK       = 12.5;                     // ## Attention this value has not been verified for the ESP32 ##
   #else
     const float      NANOSEC_PER_TICK       = 12.5;                     // number of nanosecond per measured tick in CCOUNT register
   #endif
   
   //client consts
-  const char*        CLIENT_HELLO_MSG       = "hello";                  // UDP message from client to server to say hello
-  const char*        CLIENT_REPLY_MSG       = "reply";                  // UDP message from client to server to reply to hello msg
-  const char*        CLIENT_TOUCH_HIGH_MSG  = "high";                   // UDP message from client if 3D touch probe is high
-  const char*        CLIENT_TOUCH_LOW_MSG   = "low";                    // UDP message from client if 3D touch probe is low
-  const char*        CLIENT_ALIVE_MSG       = "alive";                  // UDP message from client alive
-  const char*        CLIENT_RSSI_MSG        = "rssi";                   // UDP message from client with rssi (WLAN signal strength)
-  const char*        CLIENT_CYCLE_MSG       = "CYC:";                   // UDP message from client to server to transmit the last measured cycle time ticks
-  const char*        CLIENT_INFO_MSG        = "INFO:";                  // UDP message from client to server with infos about the client
-  const int          SERVER_ALIVE_CNT_MAX   = 2;                        // maximum server alive counter value, try to reconnect
-  const int          SERVER_ALIVE_CNT_DEAD  = 3;                        // maximum server alive counter value, server seems to be dead
-  const int          SERVER_AQUN_CNT_MAX    = 2000;                     // number of loop cycles before the server must acknowledge the high/low messages
-  const int          TOUCH_PIN_DEBOUNCE     = 700;                      // debounce time in µs for touch input pin
-  const bool         NO_SLEEP_WHILE_CHARGING = true;                     // prevent sleep during battery loading
+  const char*        CLIENT_HELLO_MSG        = "hello";                  // UDP message from client to server to say hello
+  const char*        CLIENT_REPLY_MSG        = "reply";                  // UDP message from client to server to reply to hello msg
+  const char*        CLIENT_TOUCH_HIGH_MSG   = "high";                   // UDP message from client if 3D touch probe is high
+  const char*        CLIENT_TOUCH_LOW_MSG    = "low";                    // UDP message from client if 3D touch probe is low
+  const char*        CLIENT_ALIVE_MSG        = "alive";                  // UDP message from client alive
+  const char*        CLIENT_RSSI_MSG         = "rssi";                   // UDP message from client with rssi (WLAN signal strength)
+  const char*        CLIENT_CYCLE_MSG        = "CYC:";                   // UDP message from client to server to transmit the last measured cycle time ticks
+  const char*        CLIENT_INFO_MSG         = "INFO:";                  // UDP message from client to server with infos about the client
+  const int          SERVER_ALIVE_CNT_MAX    = 2;                        // maximum server alive counter value, try to reconnect
+  const int          SERVER_ALIVE_CNT_DEAD   = 3;                        // maximum server alive counter value, server seems to be dead
+  const int          SERVER_AQUN_CNT_MAX     = 2000;                     // number of loop cycles before the server must acknowledge the high/low messages
+  const int          TOUCH_PIN_DEBOUNCE      = 700;                      // debounce time in µs for touch input pin
+  const bool         NO_SLEEP_WHILE_CHARGING = true;                     // prevent sleeping during battery loading, e.g. to keep status LED on
 
   //client and server consts
-  const uint32_t     SERVICE_INTERVALL       = 4615385;     //~15sec     // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
+  const uint32_t     SERVICE_INTERVALL       = 4615385;     //~15sec    // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
   const uint32_t     SERVICE_INTERVALL_ESP32 = 15000000;                // ESP32 Time in 1MHz ticks between service interrupt calls (20000000 = 20sec)
   const int          UDP_PACKET_MAX_SIZE     = 128;                     // UDP buffer size
   const uint8_t      SLOW_BLINK              = 1000;                    // delay for slow blinking LED
@@ -90,7 +93,7 @@ namespace CncSensor{
   IPAddress         gateway     (192,168,  2,0);                        // gateway of server, need to have a value, but does not exist
   IPAddress         subnet      (255,255,255,0);                        // subnet mask of WLAN network
 
-  //global variables
+  //Global variables
   unsigned int      serverUdpPort           = 4211;                     // server port
   unsigned int      clientUdpPort           = 4210;                     // client port
 
@@ -105,63 +108,78 @@ namespace CncSensor{
   const int         CLIENT_BAT_CRITICAL     = 3;                        // internal coding for battery is critical
 
 
-
+//##########################################Kommentare aktualisieren
   #ifdef SERVER_ESP32
     //ESP32 Server specific LEDs
-    #ifdef SERVER_RGB_LED
-      const uint8_t     SERVER_RGB_LED_OUT    = 21;                   // server rgb led
-    #else
-      const uint8_t     SERVER_POWER_LED      = 22;                   // Power LED  (AUXIO1)
-      const uint8_t     SERVER_WLAN_LED       = 5;                    // LED to inducate the current WLAN state
-    #endif
-    const uint8_t     SERVER_TOUCH_OUT        = 17;                   // LED to indicate a touch of the 3D sense
-    const uint8_t     SERVER_ERROR_OUT        = 23;                   // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
-    const uint8_t     SERVER_SLEEP_IN         = 33;                   // Input pin for the CNC controller to indicate that the slave can go to sleep
-	const uint8_t     SERVER_SLEEP_LED        = 19;                   // Sleep Output for LED
-    const uint8_t     SERVER_BAT_ALM_OUT      = 21;                   // server battery is low
-    #else
+    #ifdef SERVER_HW_REVISION_3_0
+      // Sensor Basestation hardware version 3.0 distinguishs between outputs for LED and output for CNC controller
+        const uint8_t     SERVER_POWER_LED        = 22;                   // Power LED  (AUXIO1)
+        const uint8_t     SERVER_WLAN_LED         = 21;                    // LED to inducate the current WLAN state
+        const uint8_t     SERVER_TOUCH_LED        = 32;                   // LED to indicate a touch of the 3D sense
+        const uint8_t     SERVER_ERROR_LED        = 31;                   // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
+        const uint8_t     SERVER_SLEEP_IN         = 33;                   // Input pin for the CNC controller to indicate that the slave can go to sleep
+        const uint8_t     SERVER_SLEEP_LED        = 22;                   // Sleep Output for LED
+        const uint8_t     SERVER_BAT_ALM_LED      = 23;                   // client battery is low
+        // additional channels for hardware revision 3.0
+        const uint8_t     SERVER_WLAN_OUT         = 4;                    // LED to inducate the current WLAN state
+        const uint8_t     SERVER_TOUCH_OUT        = 17;                    // LED to indicate a touch of the 3D sense
+        const uint8_t     SERVER_ERROR_OUT        = 5;                    // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
+        const uint8_t     SERVER_BAT_ALM_OUT      = 18;                    // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
+    #else //SERVER_HW_REVISION_3_0
+        //Following Data is valid for the Sensor Basestation hardware version 1.0 and 2.0
+        //ESP32 Server specific LEDs
+        const uint8_t     SERVER_POWER_LED        = 22;                   // Power LED  (AUXIO1)
+        const uint8_t     SERVER_WLAN_LED         = 5;                    // LED to inducate the current WLAN state
+        const uint8_t     SERVER_TOUCH_LED        = 17;                   // LED to indicate a touch of the 3D sense
+        const uint8_t     SERVER_ERROR_LED        = 23;                   // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
+        const uint8_t     SERVER_SLEEP_IN         = 33;                   // Input pin for the CNC controller to indicate that the slave can go to sleep
+        const uint8_t     SERVER_SLEEP_LED        = 19;                   // Sleep Output for LED
+        const uint8_t     SERVER_BAT_ALM_LED      = 21;                   // server battery is low
+    #endif //SERVER_HW_REVISION_3_0
+        const uint8_t     SERVER_HW_REVISON_0     = 25;                   // The basestation/server hardware PCB revision is coded into 3 input bit, this is bit 0
+        const uint8_t     SERVER_HW_REVISON_1     = 26;                   // The basestation/server hardware PCB revision is coded into 3 input bit, this is bit 1
+        const uint8_t     SERVER_HW_REVISON_2     = 27;                   // The basestation/server hardware PCB revision is coded into 3 input bit, this is bit 2
+
+  #else  //#ifdef SERVER_ESP32
     //ESP8266 Server specific LEDs
-    #ifdef SERVER_RGB_LED
-      const uint8_t     SERVER_RGB_LED_OUT    = 21;                   // server rgb led
-    #else
-      const uint8_t     SERVER_POWER_LED      = 22;                   // Power LED 
-      const uint8_t     SERVER_WLAN_LED       = 5;                    // LED to inducate the current WLAN state
-    #endif
-    const uint8_t     SERVER_TOUCH_OUT        = 17;                   // LED and output to indicate a touch of the 3D sense
-    const uint8_t     SERVER_ERROR_OUT        = 23;                   // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
-    const uint8_t     SERVER_SLEEP_IN         = 33;                   // Input pin for the CNC controller to indicate that the slave can go to sleep
-	const uint8_t     SERVER_SLEEP_LED        = 19;                   // Sleep Output for LED
-    const uint8_t     SERVER_BAT_ALM_OUT      = 21;                   // client battery is low
-  #endif
+    const uint8_t     SERVER_POWER_LED            = 22;                   // Power LED 
+    const uint8_t     SERVER_WLAN_LED             = 5;                    // LED to inducate the current WLAN state
+    const uint8_t     SERVER_TOUCH_LED            = 17;                   // LED and output to indicate a touch of the 3D sense
+    const uint8_t     SERVER_ERROR_LED            = 23;                   // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
+    const uint8_t     SERVER_SLEEP_IN             = 33;                   // Input pin for the CNC controller to indicate that the slave can go to sleep
+	const uint8_t     SERVER_SLEEP_LED            = 19;                   // Sleep Output for LED
+    const uint8_t     SERVER_BAT_ALM_LED          = 21;                   // client battery is low
+  #endif //#ifdef SERVER_ESP32
+
 
   #ifdef CLIENT_ESP32
     //ESP32Client specific LEDs
     #ifdef CLIENT_RGB_LED
-      const uint8_t     CLIENT_RGB_LED_OUT    = 1;                   // client rgb led
+      const uint8_t     CLIENT_RGB_LED_OUT        = 1;                   // client rgb led
     #else
-      const uint8_t     CLIENT_POWER_LED      = 5;                    // Power LED 
-      const uint8_t     CLIENT_WLAN_LED       = 6;                    // LED to inducate the current WLAN state
-      const uint8_t     CLIENT_ERROR_OUT      = 14;                   // LED to indicate error
-      const uint8_t     CLIENT_TOUCH_LED      = 15;                   // LED to indicate a touch of the 3D sensor
+      const uint8_t     CLIENT_POWER_LED          = 5;                    // Power LED 
+      const uint8_t     CLIENT_WLAN_LED           = 6;                    // LED to inducate the current WLAN state
+      const uint8_t     CLIENT_ERROR_OUT          = 14;                   // LED to indicate error
+      const uint8_t     CLIENT_TOUCH_LED          = 15;                   // LED to indicate a touch of the 3D sensor
     #endif
-    const uint8_t     CLIENT_TOUCH_IN         = 2;                    // digital input pin to listen
-    const uint8_t     CLIENT_SLEEP_OUT        = 3;                    // controls external sleep hardware
-    const uint8_t     CLIENT_ANALOG_CHANNEL   = 4;                    // Analog In channel for reading the battery voltage
-    const uint8_t     CLIENT_CHARGE_IN        = 5;                    // Battery Charging Input
+    const uint8_t     CLIENT_TOUCH_IN             = 2;                    // digital input pin to listen
+    const uint8_t     CLIENT_SLEEP_OUT            = 3;                    // controls external sleep hardware
+    const uint8_t     CLIENT_ANALOG_CHANNEL       = 4;                    // Analog In channel for reading the battery voltage
+    const uint8_t     CLIENT_CHARGE_IN            = 5;                    // Battery Charging Input
 
   #else
     //ESP8266 Client specific LEDs
     #ifdef CLIENT_RGB_LED
-      const uint8_t     CLIENT_RGB_LED_OUT    = 21;                    // client rgb led
+      const uint8_t     CLIENT_RGB_LED_OUT        = 21;                    // client rgb led
     #else
-      const uint8_t     CLIENT_POWER_LED      = 2;                    // (D4) Power LED 
-      const uint8_t     CLIENT_WLAN_LED       = 0;                    // (D3) LED to inducate the current WLAN state
-      const uint8_t     CLIENT_ERROR_OUT      = 5;                    // (D1) LED to indicate error
-      const uint8_t     CLIENT_TOUCH_LED      = 4;                    // (D2) LED to indicate a touch of the 3D sensor
+      const uint8_t     CLIENT_POWER_LED          = 2;                    // (D4) Power LED 
+      const uint8_t     CLIENT_WLAN_LED           = 0;                    // (D3) LED to inducate the current WLAN state
+      const uint8_t     CLIENT_ERROR_OUT          = 5;                    // (D1) LED to indicate error
+      const uint8_t     CLIENT_TOUCH_LED          = 4;                    // (D2) LED to indicate a touch of the 3D sensor
     #endif
-    const uint8_t     CLIENT_TOUCH_IN         = 12;                   // (D6) digital input pin to listen
-    const uint8_t     CLIENT_SLEEP_OUT        = 14;                   // (D5) controls external sleep hardware
-    const uint8_t     CLIENT_CHARGE_IN        = 13;                   // (D7) Battery Charging Input
+    const uint8_t     CLIENT_TOUCH_IN             = 12;                   // (D6) digital input pin to listen
+    const uint8_t     CLIENT_SLEEP_OUT            = 14;                   // (D5) controls external sleep hardware
+    const uint8_t     CLIENT_CHARGE_IN            = 13;                   // (D7) Battery Charging Input
 
   #endif //ifdef CLIENT_ESP32
 }  // namespace CncSensor
