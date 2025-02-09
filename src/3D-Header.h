@@ -1,7 +1,7 @@
 /**  Header
   *   
   *  @author Heiko Kalte  
-  *  @date 08.02.2025 
+  *  @date 09.02.2025 
   * 
   *  @version 0.2
   */
@@ -22,12 +22,13 @@
 
 // server/basestation specific defines
 #define SERVER_ESP32            // defines server as a ESP32 instead of a ESP8266, comment out to switch to ESP8266
-#define SERVER_HW_REVISION_3_0  // set this define if basestation/server is hardware revision 3.0 or later
+//#define SERVER_HW_REVISION_3_0  // set this define if basestation/server is hardware revision 3.0 or later
 #define WEBSERVER               // enable webserver
 
 // client specific defines
-//#define CLIENT_ESP32         // defines client as a ESP32 (e.g. Waveshare ESP32-S3-Zero)instead of a ESP8266, comment out to switch to ESP8266
-//#define CLIENT_RGB_LED       // do you have multiple LEDs or just ohne RGB LED (RGB is recommended for the client/sensor hardware)
+#define CLIENT_ESP32         // defines client as a ESP32 (e.g. Waveshare ESP32-S3-Zero)instead of a ESP8266, comment out to switch to ESP8266
+#define CLIENT_RGB_LED       // do you have multiple LEDs or just ohne RGB LED (RGB is recommended for the client/sensor hardware)
+//#define CLIENT_HW_REVISION_2_0  // set this define if client is hardware PCB revision 2.0 or later
 //## user defines end ##
 
 #include "IPAddress.h"
@@ -129,9 +130,9 @@ namespace CncSensor{
         const uint8_t     SERVER_SLEEP_LED        = 19;                   // Sleep Output for LED
         const uint8_t     SERVER_BAT_ALM_LED      = 21;                   // server battery is low
     #endif //SERVER_HW_REVISION_3_0
-        const uint8_t     SERVER_HW_REVISON_0     = 25;                   // The basestation/server hardware PCB revision is coded into 3 input bit, this is bit 0
-        const uint8_t     SERVER_HW_REVISON_1     = 26;                   // The basestation/server hardware PCB revision is coded into 3 input bit, this is bit 1
-        const uint8_t     SERVER_HW_REVISON_2     = 27;                   // The basestation/server hardware PCB revision is coded into 3 input bit, this is bit 2
+        const uint8_t     SERVER_HW_REVISION_0     = 25;                  // The basestation/server hardware PCB revision is coded into 3 input bit, this is bit 0
+        const uint8_t     SERVER_HW_REVISION_1     = 26;                  // The basestation/server hardware PCB revision is coded into 3 input bit, this is bit 1
+        const uint8_t     SERVER_HW_REVISION_2     = 27;                  // The basestation/server hardware PCB revision is coded into 3 input bit, this is bit 2
 
   #else  //#ifdef SERVER_ESP32
     //ESP8266 Server specific LEDs
@@ -148,6 +149,7 @@ namespace CncSensor{
     //ESP32Client specific LEDs
     #ifdef CLIENT_RGB_LED
       const uint8_t     CLIENT_RGB_LED_OUT        = 1;                    // client rgb led instead of multiple leds
+      //const uint8_t     CLIENT_RGB_LED_OUT        = 27;                    // client rgb led instead of multiple leds
     #else //#ifdef CLIENT_RGB_LED
       const uint8_t     CLIENT_POWER_LED          = 5;                    // Power LED 
       const uint8_t     CLIENT_WLAN_LED           = 6;                    // LED to inducate the current WLAN state
@@ -158,6 +160,15 @@ namespace CncSensor{
     const uint8_t     CLIENT_SLEEP_OUT            = 3;                    // controls external sleep hardware
     const uint8_t     CLIENT_ANALOG_CHANNEL       = 4;                    // Analog In channel for reading the battery voltage
     const uint8_t     CLIENT_CHARGE_IN            = 5;                    // Battery Charging Input
+    //const uint8_t     CLIENT_TOUCH_IN             = 33;                    // digital input pin to listen
+    //const uint8_t     CLIENT_SLEEP_OUT            = 4;                    // controls external sleep hardware
+    //const uint8_t     CLIENT_ANALOG_CHANNEL       = 26;                    // Analog In channel for reading the battery voltage
+    //const uint8_t     CLIENT_CHARGE_IN            = 25                    // Battery Charging Input
+    
+    const uint8_t     CLIENT_HW_REVISION_0         = 19;                  // (Supported by client PCB version 2.0 and later) The client hardware PCB revision is coded into 3 input bit, this is bit 0
+    const uint8_t     CLIENT_HW_REVISION_1         = 22;                  // (Supported by client PCB version 2.0 and later)The client hardware PCB revision is coded into 3 input bit, this is bit 1
+    const uint8_t     CLIENT_HW_REVISION_2         = 21;                  // (Supported by client PCB version 2.0 and later)The client hardware PCB revision is coded into 3 input bit, this is bit 2
+
   #else //#ifdef CLIENT_ESP32
     //ESP8266 Client specific LEDs
     #ifdef CLIENT_RGB_LED

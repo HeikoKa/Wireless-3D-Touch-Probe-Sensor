@@ -21,7 +21,7 @@ char *clientVersion = "V02.01";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
 #ifdef CLIENT_ESP32
     #include <WiFi.h>
-  #else //ESP8266
+#else //ESP8266
     #include <ESP8266WiFi.h>
 #endif
 #ifdef CLIENT_RGB_LED
@@ -43,7 +43,7 @@ char       packetBuffer[UDP_PACKET_MAX_SIZE];                // general buffer t
 WiFiUDP    Udp;
 long       rssi;                                             // WLAN signal strength
 bool       serviceRequest           = false;                 // interrupt service can request a service intervall by this flag
-
+int        clientHwPcbRevision      = 0;                     // From client PCB version 2 onwards the version can be read out from the PCB coded by 3 input bit
 struct statesType
 {
     bool    touchState               = LOW;                   // current touch sensor state
@@ -363,10 +363,11 @@ void wlanInit(void){
       delay(FAST_BLINK);
       yield();*/
       controlLed(CLIENT_RGB_BRIGHTNESS);
-    } //end if (packetSize)
+    } //end if(packetSize)
     if (serviceRequest == true)                                   //do service routine if isr has set the service flag
       doService();
-  }//end while(!states.wlanComplete)
+  } //end while(!states.wlanComplete)
+  
   //Send infos about client
   Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
   String cycle_msg = CLIENT_INFO_MSG;
@@ -386,6 +387,8 @@ void wlanInit(void){
    cycle_msg += String("NO CYCLETIME; ");
   #endif
   cycle_msg += clientVersion;
+  cycle_msg += String("; ");
+  cycle_msg += clientHwPcbRevision;
   #ifdef DEBUG
     Serial.printf("wlanInit(): Sending UDP message with client infos: %s\n", cycle_msg.c_str());
   #endif
@@ -464,8 +467,15 @@ static inline void initIo(void) {
   pinMode(CLIENT_SLEEP_OUT,    OUTPUT);           // control external sleep hardware
   pinMode(CLIENT_TOUCH_IN,     INPUT_PULLUP);     // set DIO to input with pullup
   pinMode(CLIENT_CHARGE_IN,    INPUT_PULLUP);     // set DIO to input with pullup
+ 
+  #ifdef CLIENT_HW_REVISION_2_0
+    pinMode(CLIENT_HW_REVISION_0, INPUT);                        // client hardware PCB revision bit 0 (only for PCB revision 2.0 or later)
+    pinMode(CLIENT_HW_REVISION_1, INPUT);                        // client hardware PCB revision bit 1 (only for PCB revision 2.0 or later)
+    pinMode(CLIENT_HW_REVISION_2, INPUT);                        // client hardware PCB revision bit 2 (only for PCB revision 2.0 or later)
+    clientHwPcbRevision = (digitalRead(CLIENT_HW_REVISION_2) << 2) + (digitalRead(CLIENT_HW_REVISION_1)<< 1) + digitalRead(CLIENT_HW_REVISION_0); //construct version number from 3 input bit
+  #endif
   
-  digitalWrite(CLIENT_SLEEP_OUT,  HIGH);          // switch on output to prevent external sleep hardware to send cpu to sleep
+  digitalWrite(CLIENT_SLEEP_OUT,  HIGH);          // switch on output to prevent external sleep hardware to send cpu and board to sleep
   controlLed(CLIENT_RGB_BRIGHTNESS);              // set all LEDs
 }
 
@@ -675,4 +685,3 @@ void loop(void){
       doService();
 
 } //end loop()
-

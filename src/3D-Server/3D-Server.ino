@@ -42,7 +42,7 @@ bool          msg_lost                   = false;               // did a UDP mes
 int           client_alive_counter       = 0;                   // current client alive counter
 WiFiUDP       Udp;                                              // UDP object
 int           rssi;
-int           serverHwPcbVersion         = 0;                   // From baestation/server PCB version 3 onwards the version can be read out from the PCB coded by 3 input bit
+int           serverHwPcbRevision        = 0;                   // From baestation/server PCB revision 3 onwards the revision can be read out from the PCB coded by 3 input bit
 volatile bool serviceRequest             = false;               // interrupt service can request a service intervall by this flag
 char          packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
 char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info received by UDP to display client info in webserver
@@ -122,7 +122,7 @@ char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info r
         message += serverVersion;
         message += "</p>";
         message += "<p> Server Shardware PCB version: ";
-        message += serverHwPcbVersion;
+        message += serverHwPcbRevision;
         message += "</p>";
         message += "<p>Server IP: ";
         message += serverIpAddr.toString().c_str();
@@ -444,10 +444,10 @@ void setup(){
   pinMode(SERVER_SLEEP_IN, INPUT_PULLUP);                        // Send Client to sleep external input
   
   #ifdef SERVER_HW_REVISION_3_0
-    pinMode(SERVER_HW_REVISON_0, INPUT);                        // server/basestation hardware PCB revisio bit 0 (only for PCB revision 3.0 or later)
-    pinMode(SERVER_HW_REVISON_1, INPUT);                        // server/basestation hardware PCB revisio bit 1 (only for PCB revision 3.0 or later)
-    pinMode(SERVER_HW_REVISON_2, INPUT);                        // server/basestation hardware PCB revisio bit 2 (only for PCB revision 3.0 or later)
-    serverHwPcbVersion = (digitalRead(SERVER_HW_REVISON_2) << 2) + (digitalRead(SERVER_HW_REVISON_1)<< 1) + digitalRead(SERVER_HW_REVISON_0); //construct version number from 3 input bit
+    pinMode(SERVER_HW_REVISION_0, INPUT);                        // server/basestation hardware PCB revisio bit 0 (only for PCB revision 3.0 or later)
+    pinMode(SERVER_HW_REVISION_1, INPUT);                        // server/basestation hardware PCB revisio bit 1 (only for PCB revision 3.0 or later)
+    pinMode(SERVER_HW_REVISION_2, INPUT);                        // server/basestation hardware PCB revisio bit 2 (only for PCB revision 3.0 or later)
+    serverHwPcbRevision = (digitalRead(SERVER_HW_REVISION_2) << 2) + (digitalRead(SERVER_HW_REVISION_1)<< 1) + digitalRead(SERVER_HW_REVISION_0); //construct version number from 3 input bit
   #endif
 
   #ifdef SERVER_HW_REVISION_3_0
