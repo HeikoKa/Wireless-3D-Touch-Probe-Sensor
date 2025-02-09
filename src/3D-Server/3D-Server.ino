@@ -4,6 +4,12 @@
   *  @date 08.02.2025 
   */
 
+
+
+//TODO
+// * when checking for lost client connection, better check, if the expected client IP adress is not connected instead of counting the connections 
+// * are round trip tick measurement for ESP32 the same as for ESP8266?
+
 char *serverVersion = "V02.02";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
 #include <stdio.h>
@@ -18,7 +24,6 @@ char *serverVersion = "V02.02";
 #include <WiFiUdp.h>
 #include <Ticker.h>
 
-
 #ifdef WEBSERVER
     #ifdef SERVER_ESP32
       #include <WebServer.h>
@@ -30,28 +35,27 @@ char *serverVersion = "V02.02";
 
 using namespace CncSensor;
 
-//TODOs
-// are round trip tick measurement for ESP32 the same time?
-
 int           clientBatteryStatus        = CLIENT_BAT_OK;       // init with battery is ok
-float         clientBateryVoltage        = 0.0;                 // client voltage
+float         clientBateryVoltage        = 0.0;                 // client voltage init value
 bool          wlan_complete              = false;               // global variable to indicate if wlan connection is established completely 
 bool          msg_lost                   = false;               // did a UDP message got lost
-int           client_alive_counter       = 0;                   // client alive counter
+int           client_alive_counter       = 0;                   // current client alive counter
 WiFiUDP       Udp;                                              // UDP object
 int           rssi;
-int           serverHwPcbVersion         = 0;                   // drom PCB version 3 on the version can be read out from the PCB coded by 3 input bit
+int           serverHwPcbVersion         = 0;                   // From baestation/server PCB version 3 onwards the version can be read out from the PCB coded by 3 input bit
 volatile bool serviceRequest             = false;               // interrupt service can request a service intervall by this flag
 char          packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
-char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info
+char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info received by UDP to display client info in webserver
+
 #ifdef SERVER_ESP32
   hw_timer_t *serviceTimer            = NULL;
   portMUX_TYPE timerMux               = portMUX_INITIALIZER_UNLOCKED;
 #endif
 
 #ifdef CYCLETIME
-  uint32_t  ticks;                                          // ticks from client performance measurement
-  int       ticksArray[SERVER_TICKS_ARRAY_SIZE]={0};        // array of ticks from client performance measurement
+  // following code is for measuring the cycle time for UDP messages from server to client to server
+  uint32_t  ticks;                                          // ticks from client for delay measurement
+  int       ticksArray[SERVER_TICKS_ARRAY_SIZE]={0};        // array of ticks from client delay measurement
   char      ticksString[50*SERVER_TICKS_ARRAY_SIZE];        // string of array tick 
   int       ticks_pointer    = 0;
   uint32_t  totalNumberTicks = 0;
@@ -63,11 +67,11 @@ char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info
     ticksArray[ticks_pointer] = ticks;
     ticks_pointer++;
     totalNumberTicks++;
-  }
+  } // end setNewTicks();
 
   static inline uint32_t getLatestTicks(){
     return ticksArray[ticks_pointer];
-  }
+  } // end getLatestTicks()
 
   static inline char* getAllTicks(){
     int i;
@@ -86,7 +90,7 @@ char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info
       strcat(ticksString, "<p>");                         // concatenate message string for webserver
       strcat(ticksString, dstring);                       // concatenate message string for webserver
       strcat(ticksString, "</p>");                        // concatenate message string for webserver
-    }
+    } // end for loop
     
     strcat(ticksString, "\n<p>Average ticks/ms: ");
     if (totalNumberTicks < SERVER_TICKS_ARRAY_SIZE)       // check if tick array is already full 
@@ -101,7 +105,7 @@ char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info
       Serial.printf("getAllTicks(): %s\n", ticksString);
     #endif
     return ticksString;
-  }
+  } // end getAllTicks()
 #endif //CYCLETIME
 
 #ifdef WEBSERVER
@@ -192,7 +196,7 @@ char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info
         server.send(200, "text/html", message);
     }
 
-    // requests that are different from root
+    // web side requests that are different from root
     void handleNotFound(){
         server.send(404, "text/plain", "404: Not found");     // Send HTTP status 404 (Not Found) when there's no handler for the URI in the request
     }
@@ -212,12 +216,12 @@ static inline void sendAliveMsg(){
     #ifdef DEBUG
       Serial.printf("sendAliveMsg(): Sending server alive message to client IP: %s and Port: %d\n", clientIpAddr.toString().c_str(), clientUdpPort);
     #endif
-  }else{
+  }else{  // if(wlan_complete)
     #ifdef DEBUG
       Serial.printf("sendAliveMsg(): No alive message send, because WLAN is not established\n");
     #endif
-  }
-}
+  } //end if(wlan_complete)
+} // end sendAliveMsg()
 
 
 static inline void checkClientStatus(){
@@ -253,8 +257,10 @@ static inline void checkClientStatus(){
         Serial.printf("checkClientStatus(): Client battery is critical\n");
       #endif
       digitalWrite(SERVER_BAT_ALM_LED, LOW);
+      //digitalWrite(SERVER_ERROR_LED, LOW);
       #ifdef SERVER_HW_REVISION_3_0
-        digitalWrite(SERVER_BAT_ALM_OUT, HIGH != SERVER_BAT_ALM_OUT_POLARITY);  // indicated critical bat to CNC controller 
+        digitalWrite(SERVER_BAT_ALM_OUT, HIGH != SERVER_BAT_ALM_OUT_POLARITY);  // indicated critical bat to CNC controller
+        //digitalWrite(SERVER_ERROR_OUT, HIGH != SERVER_ERROR_OUT_POLARITY);     // indicated critical bat to CNC controller
       #endif
     }
 
@@ -265,7 +271,7 @@ static inline void checkClientStatus(){
       #endif
       digitalWrite(SERVER_BAT_ALM_LED, HIGH);
       #ifdef SERVER_HW_REVISION_3_0
-        digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY);  // indicated good bat to CNC controller 
+        digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY);  // indicated good battery to CNC controller 
       #endif
     }  
   }else{   //if(wlan_complete)
@@ -273,7 +279,7 @@ static inline void checkClientStatus(){
       Serial.printf("checkClientStatus(): No battery check done, because WLAN is not established\n");
     #endif
   } //end if(wlan_complete)
-} //end void checkClientStatus()
+} //end checkClientStatus()
 
 
 static inline void doService(){
@@ -289,7 +295,7 @@ static inline void doService(){
   #ifdef SERVER_ESP32
     portENTER_CRITICAL_ISR(&timerMux);                      // protect acces to "serviceRequest"
   #endif
-  serviceRequest = false;                                 //reset service flag
+  serviceRequest = false;                                   // reset service flag
   #ifdef SERVER_ESP32
     portEXIT_CRITICAL_ISR(&timerMux);                       // release protection of "serviceRequest"
   #endif
@@ -297,13 +303,13 @@ static inline void doService(){
 
 
 //void ICACHE_RAM_ATTR serviceIsr(){                        // timer interrupt for regular service
-void IRAM_ATTR  serviceIsr(){                        // timer interrupt for regular service
+void IRAM_ATTR  serviceIsr(){                               // timer interrupt for regular service
   #ifdef SERVER_ESP32
-    portENTER_CRITICAL_ISR(&timerMux);                 // protect access to serviceRequest 
+    portENTER_CRITICAL_ISR(&timerMux);                      // protect access to serviceRequest 
   #endif
-  serviceRequest = true;                             // exit isr as quickly as possible and start service routine in main loop
+  serviceRequest = true;                                    // exit isr as quickly as possible and start service routine in main loop
   #ifdef SERVER_ESP32
-    portEXIT_CRITICAL_ISR(&timerMux);                  // release protection of data
+    portEXIT_CRITICAL_ISR(&timerMux);                       // release protection of data
   #endif
 }
 
@@ -320,40 +326,36 @@ void wlanInit(){
     Serial.print("wlanInit(): Waiting for clients to connect");
   #endif
 
-  while(WiFi.softAPgetStationNum() < 1){                  // loop until the first client connects
+  while(WiFi.softAPgetStationNum() < 1){                              // loop until the first client connects, can be a false client. Better check for the right IP address of the connected client
     #ifdef DEBUG
       Serial.print(".");
     #endif
 
-    #ifdef SERVER_RGB_LED
-      neopixelWrite(SERVER_WLAN_LED,0,0,SERVER_RGB_BRIGHTNESS); // RGB LED Blue ######################### muss gelb sein
+    #ifdef SERVER_HW_REVISION_3_0
+      digitalWrite(SERVER_WLAN_OUT, LOW != SERVER_WLAN_OUT_POLARITY);  // WLAN is not establised is indicated to CNC controller
+      digitalWrite(SERVER_WLAN_LED, HIGH);                             // Switch off WLAN connection LED
+      delay(SLOW_BLINK);                                               // Blink WLAN LED, but keep WLAN ouput to cnc controller false
+      digitalWrite(SERVER_WLAN_LED, LOW);                              // Switch on WLAN connection LED
+    #else
+      //do not blink LED if LED ouput is also used  as ouput for the cnc controller (PCB revision <3.0) to avoid false detection by CNC Controller
+      digitalWrite(SERVER_WLAN_LED, HIGH);                             // switch off WLAN connection LED
       delay(SLOW_BLINK);
-      neopixelWrite(SERVER_WLAN_LED,0,0,0); // LED Off 
-      delay(SLOW_BLINK);
-    #else //normal LED   ################# hier muss auch eine fallunterscheidung zwischen 3.0 und früher gemacht werden
-      digitalWrite(SERVER_WLAN_LED, HIGH);                         // switch off WLAN connection LED
-      //do not blink LED to avoid false detection by CNC Controller
-      //delay(SLOW_BLINK); 
-      //digitalWrite(SERVER_WLAN_LED, LOW);                        // switch on WLAN connection LED
-      delay(SLOW_BLINK);      //################################# 
     #endif
     yield();
     if (serviceRequest == true)        //do service routine if isr has set the service flag
       doService();
   } //waiting for clients to connect either 3D touch probe client or a webbrowser if webserver is enabled
-  #ifdef SERVER_HW_REVISION_3_0
-    digitalWrite(SERVER_WLAN_OUT, HIGH != SERVER_WLAN_OUT_POLARITY);  // successful WLAN establishing is indicated to CNC controller 
-  #endif
 
   #ifdef DEBUG
     Serial.println("Ready");
     Serial.printf("wlanInit(): Clients connected: %d\n", WiFi.softAPgetStationNum());
   #endif
 
+  // A client is connected at this point, now check by UDP messages, if it is the right client
   Udp.begin(serverUdpPort);                               //setup UDP receiver
 
   while(!wlan_complete){
-    //send hello message
+    //send hello message to the connected client
     #ifdef DEBUG
       Serial.printf("wlanInit(): Sending Hello message to client IP: ");
       Serial.printf(clientIpAddr.toString().c_str());
@@ -362,15 +364,16 @@ void wlanInit(){
     #endif
     Udp.beginPacket(clientIpAddr, clientUdpPort);
     #ifdef SERVER_ESP32
-     Udp.printf(SERVER_HELLO_MSG);
+      Udp.printf(SERVER_HELLO_MSG);
     #else //ESP8266
       Udp.write(SERVER_HELLO_MSG);
     #endif    
     Udp.endPacket(); 
     
-    // listen for respond from client
+    // listen for UDP respond from client
     int packetSize = Udp.parsePacket();
     if (packetSize){
+      // udp packet received
       int len = Udp.read(packetBuffer, UDP_PACKET_MAX_SIZE);
       if (len > 0)
           packetBuffer[len] = '\0';
@@ -390,35 +393,32 @@ void wlanInit(){
         #endif
         Udp.endPacket();        
       }
-
-      wlan_complete = true;                               // WLAN connection is complete, stop listening for further incoming UPD packages
-      #ifdef SERVER_RGB_LED
-          neopixelWrite(SERVER_WLAN_LED,0,0,SERVER_RGB_BRIGHTNESS);
-        #else
-          digitalWrite(SERVER_WLAN_LED, LOW);                        // switch on WLAN connection LED to indicate sucessfull connection
-      #endif
+      // at this point a client is connected and UDP messages have been exchanged
+      wlan_complete = true;                                     // WLAN connection is complete, stop listening for further incoming UPD packages
+      digitalWrite(SERVER_WLAN_LED, LOW);                       // switch on WLAN connection LED to indicate sucessfull connection
       #ifdef SERVER_HW_REVISION_3_0
         digitalWrite(SERVER_WLAN_OUT, HIGH != SERVER_WLAN_OUT_POLARITY);  // successful WLAN establishing is indicated to CNC controller 
       #endif
+      
       #ifdef DEBUG
         Serial.print("wlanInit(): WLAN is complete\n");
       #endif
-    }else{   //if (packetSize)
+    }else{ //if(packetSize)
       #ifdef DEBUG
         Serial.printf("wlanInit(): No respond from client yet\n");
       #endif
-      #ifdef SERVER_RGB_LED
-          neopixelWrite(SERVER_WLAN_LED,0,0,0);      // ############### sind die  Farben richtig#####
-        #else
-          digitalWrite(SERVER_WLAN_LED, HIGH);                       // switch off WLAN connection LED
-          //Do not blink WLAN LED to avoid false detection by CNC controller
-          delay(FAST_BLINK);          // ############################## kann das raus, verzögert das nur unnötig die WLAN Verbindung
-      #endif
+
       #ifdef SERVER_HW_REVISION_3_0
-        digitalWrite(SERVER_WLAN_OUT, LOW != SERVER_WLAN_OUT_POLARITY);  // idicate missing WLAN connection to CNC controller 
+        digitalWrite(SERVER_WLAN_OUT, LOW != SERVER_WLAN_OUT_POLARITY);  // indicate no successfull WLAN/UDP connection to CNC controller 
+        digitalWrite(SERVER_WLAN_LED, HIGH);                             // switch off WLAN LED 
+        delay(FAST_BLINK);                                               // make a small pause
+        digitalWrite(SERVER_WLAN_LED, LOW);                              // switch on WLAN LED 
+      #else // PCB revision <3.0
+        digitalWrite(SERVER_WLAN_LED, HIGH);                             // still switch off WLAN connection LED for PCB <3.0 to avoid false detection by CNC controller
+        delay(FAST_BLINK);                                               // make a small pause
       #endif
       yield(); 
-    } //if (packetSize)
+    } //end if(packetSize)
 
     #ifdef WEBSERVER
     //handle client access if webserver is enabled
@@ -431,7 +431,7 @@ void wlanInit(){
 void setup(){
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                     // Setup Serial Interface with baud rate
-    Serial.println("setup(): I am the 3D Touch Probe Sensor Server");
+    Serial.println("setup(): I am the 3D Touch Probe Sensor Server/Basestation");
   #endif
 
   //initialize digital input/output pins
@@ -443,20 +443,21 @@ void setup(){
   pinMode(SERVER_SLEEP_LED,      OUTPUT);                        // Send Client to sleep LED
   pinMode(SERVER_SLEEP_IN, INPUT_PULLUP);                        // Send Client to sleep external input
   
-  pinMode(SERVER_HW_REVISON_0, INPUT);                        // server/basestation hardware PCB revisio bit 0
-  pinMode(SERVER_HW_REVISON_1, INPUT);                        // server/basestation hardware PCB revisio bit 1
-  pinMode(SERVER_HW_REVISON_2, INPUT);                        // server/basestation hardware PCB revisio bit 2
+  #ifdef SERVER_HW_REVISION_3_0
+    pinMode(SERVER_HW_REVISON_0, INPUT);                        // server/basestation hardware PCB revisio bit 0 (only for PCB revision 3.0 or later)
+    pinMode(SERVER_HW_REVISON_1, INPUT);                        // server/basestation hardware PCB revisio bit 1 (only for PCB revision 3.0 or later)
+    pinMode(SERVER_HW_REVISON_2, INPUT);                        // server/basestation hardware PCB revisio bit 2 (only for PCB revision 3.0 or later)
+    serverHwPcbVersion = (digitalRead(SERVER_HW_REVISON_2) << 2) + (digitalRead(SERVER_HW_REVISON_1)<< 1) + digitalRead(SERVER_HW_REVISON_0); //construct version number from 3 input bit
+  #endif
 
   #ifdef SERVER_HW_REVISION_3_0
   //hardware version 3.0 utilizes two outputs one to control the LED and one to control the output to the CNC controller
-    pinMode(SERVER_WLAN_OUT,      OUTPUT);                        // TBD
-    pinMode(SERVER_TOUCH_OUT,     OUTPUT);                        // TBD
-    pinMode(SERVER_ERROR_OUT,     OUTPUT);                        // TBD
-    pinMode(SERVER_BAT_ALM_OUT,   OUTPUT);                        // TBD
+    pinMode(SERVER_WLAN_OUT,      OUTPUT);                        // Separt WLAN established Output for CNC controller 
+    pinMode(SERVER_TOUCH_OUT,     OUTPUT);                        // Separt Touch output for CNC controller
+    pinMode(SERVER_ERROR_OUT,     OUTPUT);                        // Separt Error output for CNC controller
+    pinMode(SERVER_BAT_ALM_OUT,   OUTPUT);                        // Separt Battery alarm output for CNC controller
   #endif
 
-  serverHwPcbVersion = (digitalRead(SERVER_HW_REVISON_2) << 2) + (digitalRead(SERVER_HW_REVISON_1)<< 1) + digitalRead(SERVER_HW_REVISON_0); //construct version number from 3 input bit
-  
   //Initialize timer interrup for battery control
   #ifdef SERVER_ESP32
     serviceTimer = timerBegin(1000000);                          // Set timer frequency to 1MHz
@@ -478,12 +479,11 @@ void setup(){
   digitalWrite(SERVER_SLEEP_LED,   HIGH);                        // switch off sleep request LED
   
   #ifdef SERVER_HW_REVISION_3_0
-  //write default values of digital outputs to CNC controller
-  //from hardware version 3.0 two outputs are utilized, one to control the LED and one to control the output to the CNC controller
-   digitalWrite(SERVER_WLAN_OUT,      LOW != SERVER_WLAN_OUT_POLARITY);                        // #################### it die logic richtig?
-   digitalWrite(SERVER_TOUCH_OUT,     LOW != SERVER_TOUCH_OUT_POLARITY);                       // TBD
-   digitalWrite(SERVER_ERROR_OUT,     LOW != SERVER_ERROR_OUT_POLARITY);                // TBD
-   digitalWrite(SERVER_BAT_ALM_OUT,   LOW != SERVER_BAT_ALM_OUT_POLARITY);              // TBD
+  //write default values of digital outputs to CNC controller. From hardware version 3.0 two outputs are utilized, one to control the LED and one to control the output to the CNC controller
+   digitalWrite(SERVER_WLAN_OUT,    LOW != SERVER_WLAN_OUT_POLARITY);    // Default value for WLAN output, considering the polarity
+   digitalWrite(SERVER_TOUCH_OUT,   LOW != SERVER_TOUCH_OUT_POLARITY);   // Default value for Touch output, considering the polarity
+   digitalWrite(SERVER_ERROR_OUT,   LOW != SERVER_ERROR_OUT_POLARITY);   // Default value for ERROR output, considering the polarity
+   digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY); // Default value for Battery alarm output, considering the polarity
   #endif
 
   //Setup Soft-AP
@@ -511,9 +511,9 @@ void setup(){
     #ifdef DEBUG
       Serial.println("Failed!");
     #endif
-    digitalWrite(SERVER_ERROR_LED, LOW);                         //switch on error LED
+    digitalWrite(SERVER_ERROR_LED, LOW);                                  //switch on error LED
     #ifdef SERVER_HW_REVISION_3_0
-      digitalWrite(SERVER_ERROR_OUT, HIGH != SERVER_ERROR_OUT_POLARITY);  // successful WLAN establishing is indicated to CNC controller 
+      digitalWrite(SERVER_ERROR_OUT, HIGH != SERVER_ERROR_OUT_POLARITY);  // Set Error output to indicated to the CNC controller 
     #endif
   } // end if(result == true)
 } //end setup() 
@@ -522,15 +522,14 @@ void setup(){
 
 
 void loop(){
-
   char* errCheck;
     
   #ifdef WEBSERVER
     server.handleClient();  ////handle client access if webserver is enabled
   #endif
     
-  // WLAN client got lost
-  // better check would be compare the client IP address to the expected client IP address, other webbrowsers are clients as well
+  // check if WLAN client got lost
+  // better check would be compare the client IP address to the expected client IP address, other webbrowsers connections are clients as well
   if ((WiFi.softAPgetStationNum() < 1)||(wlan_complete == false)){
     wlan_complete = false;
     #ifdef DEBUG
@@ -539,9 +538,9 @@ void loop(){
     wlanInit();
   } //if (WiFi)
 
-  // send sleep message to client if the server input pin is low (CNC does not need the sensor in the next minutes)
-  if (((digitalRead(SERVER_SLEEP_IN) == HIGH)&&(!SERVER_SLEEP_IN_POLARITY)) || ((digitalRead(SERVER_SLEEP_IN) == LOW)&&(SERVER_SLEEP_IN_POLARITY))){
-    digitalWrite(SERVER_SLEEP_LED,   LOW);                        // indicate sleep request by LED
+  // send sleep message to client if the server input pin is low (CNC does not need the sensor in the next minutes). It is asumed to use an inverting transistor at the sleep input
+  if (((digitalRead(SERVER_SLEEP_IN) == HIGH)&&(SERVER_SLEEP_IN_POLARITY)) || ((digitalRead(SERVER_SLEEP_IN) == LOW)&&(!SERVER_SLEEP_IN_POLARITY))){
+    digitalWrite(SERVER_SLEEP_LED, LOW);                        // indicate sleep request by LED
     #ifdef DEBUG
       Serial.printf("loop(): CNC controller wants to send the client asleep\n");
     #endif
@@ -551,7 +550,6 @@ void loop(){
     #else //ESP8266
       Udp.write(SERVER_SLEEP_MSG);
     #endif
-
     Udp.endPacket();
   } // end if (digitalRead)
 
@@ -568,7 +566,7 @@ void loop(){
       #ifdef SERVER_HW_REVISION_3_0
         digitalWrite(SERVER_TOUCH_OUT, HIGH != SERVER_TOUCH_OUT_POLARITY);  // indicate touch high to CNC controller 
       #endif
-      char *highMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_HIGH_MSG);        // ##################was macht das für einen Sinn, die string länge an den String zu hängen ###############cut/decode additional information out of the client message
+      char *highMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_HIGH_MSG);        // cut/decode additional information out of the client message
       if (!strncmp (highMsgAttach, "1", strlen("1")))
         msg_lost = true;
       #ifdef DEBUG
@@ -690,10 +688,9 @@ void loop(){
       return;
     }
 
-    //received client info message
+    //received client info message, several information about the client paramters and version
     if (!strncmp (packetBuffer, CLIENT_INFO_MSG, strlen(CLIENT_INFO_MSG))){    // decode the CLIENT_INFO_MSG prefix from the msg
       char *temp = packetBuffer + strlen(CLIENT_INFO_MSG);                    // cut/decode the raw infos out of the client message
-      //clientInfo = packetBuffer + strlen(CLIENT_INFO_MSG);                   // cut/decode the raw infos out of the client message
       strcpy(clientInfo, temp);
       #ifdef DEBUG
           Serial.printf("loop(): Received client info message: %s \n", clientInfo);
