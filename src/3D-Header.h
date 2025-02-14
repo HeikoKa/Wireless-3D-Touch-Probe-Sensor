@@ -67,20 +67,20 @@ namespace CncSensor{
   const char*        CLIENT_RSSI_MSG         = "rssi";                    // UDP message from client with rssi (WLAN signal strength)
   const char*        CLIENT_CYCLE_MSG        = "CYC:";                    // UDP message from client to server to transmit the last measured cycle time ticks
   const char*        CLIENT_INFO_MSG         = "INFO:";                   // UDP message from client to server with infos about the client
-  const int          SERVER_ALIVE_CNT_MAX    = 2;                         // maximum server alive counter value, try to reconnect
-  const int          SERVER_ALIVE_CNT_DEAD   = 3;                         // maximum server alive counter value, server seems to be dead
+  const int          SERVER_ALIVE_CNT_MAX    = 1;                         // maximum server alive counter value, try to reconnect
+  const int          SERVER_ALIVE_CNT_DEAD   = 2;                         // maximum server alive counter value, server seems to be dead
   const int          SERVER_AQUN_CNT_MAX     = 2000;                      // number of loop cycles before the server must acknowledge the high/low messages
   const int          TOUCH_PIN_DEBOUNCE      = 700;                       // debounce time in µs for touch input pin
-  const bool         NO_SLEEP_WHILE_CHARGING = true;                      // prevent sleeping during battery loading, e.g. to keep status LED on
-  const uint8_t      CLIENT_RGB_BRIGHTNESS   = 5;                         // brightness of the RGB LED (max 255)
-
+  const bool         NO_SLEEP_WHILE_CHARGING = false;                     // prevent sleeping during battery loading, e.g. to keep status LED on
+  const uint8_t      CLIENT_RGB_BRIGHTNESS   = 20;                        // brightness of the RGB LED (max 255). Product of CLIENT_RGB_BRIGHTNESS x RGB_FADE_SPEED = Fading Time at start and end
+  const uint8_t      RGB_FADE_SPEED          = 100;                       // speed for fading out the LED brightness when going to sleep. Set as delay, smaller value faster fading
+  const bool         CLIENT_TOUCH_POLARITY   = true;                      // invert sensor touch input
   //client and server consts
   const uint32_t     SERVICE_INTERVALL       = 4615385;     //~15sec      // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
   const uint32_t     SERVICE_INTERVALL_ESP32 = 15000000;                  // ESP32 Time in 1MHz ticks between service interrupt calls (20000000 = 20sec)
   const int          UDP_PACKET_MAX_SIZE     = 128;                       // UDP buffer size
   const uint8_t      SLOW_BLINK              = 1000;                      // delay for slow blinking LED
   const uint8_t      FAST_BLINK              = 500;                       // delay for fast blinking LED
-  const uint8_t      RGB_FADE_SPEED          = 250;                       // speed for fading out the LED brightness when going to sleep
   const uint8_t      WLAN_INIT_PAUSE         = 100;                       // Pause length during WLAN initiation
 
   //IP addresses
@@ -107,7 +107,7 @@ namespace CncSensor{
     //ESP32 Server specific LEDs
     #ifdef SERVER_HW_REVISION_3_0
       // Sensor Basestation hardware version 3.0 distinguishs between outputs for LED and output for CNC controller
-        const uint8_t     SERVER_POWER_LED        = 14;                   // #####################Power LED, is not used, the basestation hardware 
+        const uint8_t     SERVER_POWER_LED        = 14;                   // #####################Power LED, is not used
         const uint8_t     SERVER_WLAN_LED         = 21;                   // LED to inducate the current WLAN state
         const uint8_t     SERVER_TOUCH_LED        = 32;                   // LED to indicate a Touch of the 3D sensor
         const uint8_t     SERVER_ERROR_LED        = 19;                   // Error output that can e.g tell the cnc controller to stop
@@ -141,29 +141,24 @@ namespace CncSensor{
     const uint8_t     SERVER_TOUCH_LED            = 17;                   // LED and output to indicate a touch of the 3D sense
     const uint8_t     SERVER_ERROR_LED            = 23;                   // Error output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
     const uint8_t     SERVER_SLEEP_IN             = 33;                   // Input pin for the CNC controller to indicate that the slave can go to sleep
-	const uint8_t     SERVER_SLEEP_LED            = 19;                   // Sleep output for LED
+    const uint8_t     SERVER_SLEEP_LED            = 19;                   // Sleep output for LED
     const uint8_t     SERVER_BAT_ALM_LED          = 21;                   // client battery is low
   #endif //#ifdef SERVER_ESP32
 
   #ifdef CLIENT_ESP32
     //ESP32Client specific LEDs
     #ifdef CLIENT_RGB_LED
-      const uint8_t     CLIENT_RGB_LED_OUT        = 1;                    // client rgb led instead of multiple leds
-      //const uint8_t     CLIENT_RGB_LED_OUT        = 27;                    // client rgb led instead of multiple leds
+      const uint8_t     CLIENT_RGB_LED_OUT        = 27;                    // client rgb led instead of multiple leds
     #else //#ifdef CLIENT_RGB_LED
       const uint8_t     CLIENT_POWER_LED          = 5;                    // Power LED 
       const uint8_t     CLIENT_WLAN_LED           = 6;                    // LED to inducate the current WLAN state
       const uint8_t     CLIENT_ERROR_OUT          = 14;                   // LED to indicate error
       const uint8_t     CLIENT_TOUCH_LED          = 15;                   // LED to indicate a touch of the 3D sensor
     #endif //#ifdef CLIENT_RGB_LED
-    const uint8_t     CLIENT_TOUCH_IN             = 2;                    // digital input pin to listen
-    const uint8_t     CLIENT_SLEEP_OUT            = 3;                    // controls external sleep hardware
-    const uint8_t     CLIENT_ANALOG_CHANNEL       = 4;                    // Analog In channel for reading the battery voltage
-    const uint8_t     CLIENT_CHARGE_IN            = 5;                    // Battery Charging Input
-    //const uint8_t     CLIENT_TOUCH_IN             = 33;                    // digital input pin to listen
-    //const uint8_t     CLIENT_SLEEP_OUT            = 4;                    // controls external sleep hardware
-    //const uint8_t     CLIENT_ANALOG_CHANNEL       = 26;                    // Analog In channel for reading the battery voltage
-    //const uint8_t     CLIENT_CHARGE_IN            = 25                    // Battery Charging Input
+    const uint8_t     CLIENT_TOUCH_IN             = 33;                    // digital input pin to listen
+    const uint8_t     CLIENT_SLEEP_OUT            = 4;                    // controls external sleep hardware
+    const uint8_t     CLIENT_ANALOG_CHANNEL       = 26;                    // Analog In channel for reading the battery voltage
+    const uint8_t     CLIENT_CHARGE_IN            = 25;                    // Battery Charging Input
     
     const uint8_t     CLIENT_HW_REVISION_0         = 19;                  // (Supported by client PCB version 2.0 and later) The client hardware PCB revision is coded into 3 input bit, this is bit 0
     const uint8_t     CLIENT_HW_REVISION_1         = 22;                  // (Supported by client PCB version 2.0 and later)The client hardware PCB revision is coded into 3 input bit, this is bit 1

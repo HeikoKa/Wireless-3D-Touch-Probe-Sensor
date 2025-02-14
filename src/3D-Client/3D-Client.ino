@@ -1,21 +1,14 @@
-/**  Client
+/**  3D Sensor Client
   *   
   *  @author Heiko Kalte  
-  *  @date 27.12.2024 
-  * 
-  *  @version 0.4
+  *  @date 14.02.2025 
+  *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
-  // 0.1:   initial version
-  // 0.2:   Changed function due to new sleep hardware (former deep sleep consumes to much power)
-  // 0.3:   Added ESP32 Support
-  // 0.4:   refactoring and RBG LED support
-
-  //TODO
+  
+  //TODO/Suggestions
   // man könnte die verschiedenen Errors batteryError, rssiError, touchStateError, aliveCounterError auch durch unterschiedliche Farben oder Blinken anzeigen
-  // kann ESP8266 auch "Udp.printf(CLIENT_REPLY_MSG);" dann könnte man sich eine Unterscheidung sparen
-  // Im Server die Zustände zurücksetzen, wenn WLAN verloren ging
 
-char *clientVersion = "V02.01";
+char *clientSwVersion = "V02.01";
 #include <WiFiUdp.h>
 #include <Ticker.h>
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
@@ -44,6 +37,7 @@ WiFiUDP    Udp;
 long       rssi;                                             // WLAN signal strength
 bool       serviceRequest           = false;                 // interrupt service can request a service intervall by this flag
 int        clientHwPcbRevision      = 0;                     // From client PCB version 2 onwards the version can be read out from the PCB coded by 3 input bit
+int        analogVolts              = 0;
 struct statesType
 {
     bool    touchState               = LOW;                   // current touch sensor state
@@ -79,26 +73,23 @@ statesType states;
 
  static inline void doSensorHigh(void){
   String high_msg;
-  //digitalWrite(CLIENT_TOUCH_LED, LOW);                           // ########statt controlLed##############indicate the current touch state by LED output
   #ifdef DEBUG
     Serial.println(CLIENT_TOUCH_HIGH_MSG);
   #endif
   if (states.wlanComplete){
       Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());          // send UDP packet to server to indicate the 3D touch change 
       high_msg = CLIENT_TOUCH_HIGH_MSG + String(states.touchStateError); // put the current touch error state into the UDP message
-      
       #ifdef CLIENT_ESP32
-        //Udp.write((uint8_t *)high_msg.c_str(), sizeof(high_msg.c_str()));
         Udp.printf(high_msg.c_str());
       #else //ESP8266
         Udp.write(high_msg.c_str());
       #endif
       Udp.endPacket();
-      high_command_acknowledge = false;                   // set acknowledge to false until the server responses with the same command
-      states.touchState        = HIGH;                    // remember the current state
-      controlLed(CLIENT_RGB_BRIGHTNESS);                  // set touch LED
+      high_command_acknowledge = false;                           // set acknowledge to false until the server responses with the same command
+      states.touchState        = HIGH;                            // remember the current state
+      controlLed(CLIENT_RGB_BRIGHTNESS, false);                   // set touch LED
       #ifdef CYCLETIME
-        bTimeHigh = asm_ccount();                         // take begin time for client to server to client cycle time measurement
+        bTimeHigh = asm_ccount();                                 // take begin time for client to server to client cycle time measurement
       #endif
   } // end if (states.wlanComplete)
 } // end void doSensorHigh(void)
@@ -120,7 +111,7 @@ static inline void doSensorLow(void){
     Udp.endPacket();
     low_command_acknowledge = false;                    // set acknowledge to false until the server responses with the same command
     states.touchState       = LOW;                      // remember the current state
-    controlLed(CLIENT_RGB_BRIGHTNESS);                  // set touch LED
+    controlLed(CLIENT_RGB_BRIGHTNESS, false);                  // set touch LED
     #ifdef CYCLETIME
       bTimeLow = asm_ccount();                          // take begin time for client to server to client cycle time measurement
     #endif
@@ -139,7 +130,7 @@ static inline void checkAliveCounter(void){
     if (server_alive_cnt < SERVER_ALIVE_CNT_DEAD){
       // server alive messages are missing, but try to reconnect
       #ifdef DEBUG
-        Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals. Going to sleep\n", server_alive_cnt);
+        Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals.\n", server_alive_cnt);
       #endif
       server_alive_cnt++;                                        // keep incrementing server alive counter during reconnect tries
       states.wlanComplete      = false;                          // server is (temporary?) dead the connection must be re-establisched
@@ -163,7 +154,8 @@ static inline void checkBatteryVoltage(void){
   String cycle_msg;
   // measure battery voltage
   #ifdef CLIENT_ESP32
-    int analogVolts = analogReadMilliVolts(CLIENT_ANALOG_CHANNEL);
+    //uint32_t analogVolts = analogReadMilliVolts(CLIENT_ANALOG_CHANNEL);
+    analogVolts =analogRead(CLIENT_ANALOG_CHANNEL);
     float batVoltage = 2*analogVolts/1000;                          // Battery Voltage is divided by 2 by resistors on PCB
   #else
     int analogVolts = ESP.getVcc();
@@ -177,33 +169,62 @@ static inline void checkBatteryVoltage(void){
         Serial.printf("checkBatteryVoltage(): Voltage is critical, current value is ");
         Serial.println(batVoltage);
       #endif
-    }else{                                                 // battery is only low
-      cycle_msg = CLIENT_BAT_LOW_MSG + String(batVoltage); // pack message and bat voltage in the UDP frame
+    }else{ //if(batVoltage < BAT_CRIT_VOLT)                         // battery is only low
+      cycle_msg = CLIENT_BAT_LOW_MSG + String(batVoltage);          // pack message and bat voltage in the UDP frame
       #ifdef DEBUG
         Serial.printf("checkBatteryVoltage(): Voltage is low, current value is ");
         Serial.println(batVoltage);
       #endif
-    }
+    }  // if(batVoltage < BAT_CRIT_VOLT)
     states.batteryError = true;                           // indicate low or critical battery by LED
-  }else{                                                  // battery is ok
+  }else{ // if(batVoltage < BAT_LOW_VOLT)                                             // battery is ok
     cycle_msg = CLIENT_BAT_OK_MSG + String(batVoltage);   // pack message and bat voltage in the UDP frame
     #ifdef DEBUG
       Serial.printf("checkBatteryVoltage(): Bat Voltage is ok, measured value is %.2fV (low bat is %.2fV and critical bat is %.2fV)\n", batVoltage, BAT_LOW_VOLT, BAT_CRIT_VOLT);
     #endif
     states.batteryError = false;
-  }
-  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-  #ifdef CLIENT_ESP32
-    Udp.printf(cycle_msg.c_str());
-  #else //ESP8266
-    Udp.write(cycle_msg.c_str());
-  #endif
-  Udp.endPacket();
-} // end void checkBatteryVoltage(void)
+  } // if(batVoltage < BAT_LOW_VOLT)
 
+  if (states.wlanComplete == true){               // check for WLAN connection to avoid exception
+    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+    #ifdef CLIENT_ESP32
+      Udp.printf(cycle_msg.c_str());
+    #else //ESP8266
+      Udp.write(cycle_msg.c_str());
+    #endif
+    Udp.endPacket();
+  }else{ // if(states.wlanComplete == true)
+    #ifdef DEBUG
+      Serial.println("checkBatteryVoltage(): Not sending UDP message, due to missing server connection");
+    #endif
+  }  // if(states.wlanComplete == true)
+} // end checkBatteryVoltage(void)
+
+String collectClientData(void){
+  String msg = CLIENT_INFO_MSG;
+  #ifdef CLIENT_ESP32
+   msg += String("ESP32; ");
+  #else
+   msg += String("ESP8266; ");
+  #endif
+  #ifdef DEBUG
+   msg += String("DEBUG On; ");
+  #else
+   msg += String("DEBUG Off; ");
+  #endif
+  #ifdef CYCLETIME
+   msg += String("CYCLETIME On; ");
+  #else
+   msg += String("CYCLETIME Off; ");
+  #endif
+  msg += clientSwVersion;
+  msg += String("; ");
+  msg += clientHwPcbRevision;
+  return msg;
+} // collectClientData(void)
 
 static inline void checkWlanStatus(void) {
-  if (states.wlanComplete){
+  if (states.wlanComplete == true){
     if (WiFi.status() != WL_CONNECTED){
       #ifdef DEBUG
         Serial.printf("checkWlanStatus(): WLAN is not connected anymore\n");
@@ -223,31 +244,45 @@ static inline void checkWlanStatus(void) {
         Serial.println(rssi);
       #endif
       states.rssiError = false;
-    } // end if (rssi < WIFI_RSSI_REPORT_LEVEL)
-  } //end if (states.wlanComplete)
-  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-  String cycle_msg = CLIENT_RSSI_MSG + String(rssi);   // pack message and rssi in the UDP frame
-  #ifdef CLIENT_ESP32
-    Udp.printf(cycle_msg.c_str());
-  #else //ESP8266
-    Udp.write(cycle_msg.c_str());
-  #endif
-  Udp.endPacket();
+    } // end if(rssi < WIFI_RSSI_REPORT_LEVEL)
+  } //end if(states.wlanComplete)
+
+  // ##### doppelte abfrage nach states.wlanComplete
+  if (states.wlanComplete == true){
+    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+    String cycle_msg = CLIENT_RSSI_MSG + String(rssi);   // pack message and rssi in the UDP frame
+    #ifdef CLIENT_ESP32
+      Udp.printf(cycle_msg.c_str());
+    #else //ESP8266
+      Udp.write(cycle_msg.c_str());
+    #endif
+    Udp.endPacket();
+  }else{
+    #ifdef DEBUG
+      Serial.printf("checkWlanStatus(): Not sending UDP message du to missing server connection\n");
+    #endif
+  } // if(states.wlanComplete == true)
 } //end void checkWlanStatus()
 
 
 static inline void sendAliveMsg(void) {
-  // send alive message regardless of the WLAN state and if connection is established
-  #ifdef DEBUG
-    Serial.printf("sendAliveMsg(): Sending UDP alive message to server\n");
-  #endif
-  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-  #ifdef CLIENT_ESP32
-    Udp.printf(CLIENT_ALIVE_MSG);
-  #else //ESP8266
-    Udp.write(CLIENT_ALIVE_MSG);
-  #endif
-  Udp.endPacket();
+  // send alive message
+  if (states.wlanComplete == true){               // check for WLAN connection to avoid exception
+    #ifdef DEBUG
+      Serial.printf("sendAliveMsg(): Sending UDP alive message to server\n");
+    #endif
+    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+    #ifdef CLIENT_ESP32
+      Udp.printf(CLIENT_ALIVE_MSG);
+    #else //ESP8266
+      Udp.write(CLIENT_ALIVE_MSG);
+    #endif
+    Udp.endPacket();
+  }else{ //if(states.wlanComplete == true)
+    #ifdef DEBUG
+      Serial.println("sendAliveMsg(): Not sending UDP alive message because of missing server connection");
+    #endif
+  } // if(states.wlanComplete == true)
 } // end void sendAliveMsg(void)
 
 
@@ -260,7 +295,7 @@ static inline void doService(void){
   checkAliveCounter();                                    // check server alive counter in service
   sendAliveMsg();                                         // send client alive in service
   checkWlanStatus();                                      // check WLAN status and signal strength
-  controlLed(CLIENT_RGB_BRIGHTNESS);                      // set the red error LED
+  controlLed(CLIENT_RGB_BRIGHTNESS, false);                      // set LED(s)
   #ifdef CLIENT_ESP32
     portENTER_CRITICAL_ISR(&timerMux);                 // protect access to serviceRequest 
   #endif
@@ -289,18 +324,20 @@ void ICACHE_RAM_ATTR serviceIsr(void){                    // timer interrupt ser
 void wlanInit(void){
   WiFi.config(clientIpAddr, gateway, subnet);             // set manual IP address if in Soft Access Point (SAP) mode
   #ifdef DEBUG
-    Serial.println("\n\n");
+    Serial.println("\n");
     Serial.printf("wlanInit(): Connecting to %s ", SSID);
   #endif
-  states.wlanCompleteBlink = true;                        // switch on blinking
+  states.wlanCompleteBlink = true;                        // ############### das wird niergends abgestellt ####### switch on blinking
   WiFi.begin(SSID, password);                             // connect to WLAN 
   while (WiFi.status() != WL_CONNECTED){                  // stay in this loop until a WLAN connection could be established
-    controlLed(CLIENT_RGB_BRIGHTNESS);                    // blink WLAN LED until WLAN is established 
-    delay(WLAN_INIT_PAUSE); 
+    controlLed(CLIENT_RGB_BRIGHTNESS, false);                    // blink WLAN LED until WLAN is established 
+    delay(WLAN_INIT_PAUSE);                               // ############## wirkt sich das nicht auf das Blinken aus? #### wait for a moment before checking connection again
     yield();
     #ifdef DEBUG
       Serial.print(".");
     #endif
+    if (serviceRequest == true)                           // do service routine if isr has set the service flag
+      doService();
   }//end while WiFi.status
 
   Udp.begin(clientUdpPort);                               // now listening for a server to send UDP messages
@@ -342,11 +379,11 @@ void wlanInit(void){
           Udp.endPacket();
         } // end if(!strcmp(packetBuffer, SERVER_HELLO_MSG))
         states.wlanComplete = true;                             // WLAN connection is complete
-        controlLed(CLIENT_RGB_BRIGHTNESS);                      // switch off WLAN LED to indicate that WLAN connection is complete (no more blinking)
+        controlLed(CLIENT_RGB_BRIGHTNESS, false);                      // switch off WLAN LED to indicate that WLAN connection is complete (no more blinking)
         #ifdef DEBUG
           Serial.print("wlanInit(): WLAN is complete\n");
         #endif 
-      }else{                                              // server address is unexpected
+      }else{   // unexpected UDP sender                                          // server address is unexpected
         #ifdef DEBUG
           Serial.printf("wlanInit(): Received UDP packet from unexpected IP: %s, port %d\n",  Udp.remoteIP().toString().c_str(), Udp.remotePort());
         #endif
@@ -356,13 +393,13 @@ void wlanInit(void){
       #ifdef DEBUG
         Serial.printf("wlanInit(): No respond from server yet\n");
       #endif
-      /*
-      digitalWrite(CLIENT_WLAN_LED, HIGH);                       // toggle WLAN LED quickly to indicate connection try
-      delay(FAST_BLINK);
-      digitalWrite(CLIENT_WLAN_LED, LOW);                        // toggle WLAN LED quickly to indicate connection try
-      delay(FAST_BLINK);
-      yield();*/
-      controlLed(CLIENT_RGB_BRIGHTNESS);
+      
+      //digitalWrite(CLIENT_WLAN_LED, HIGH);                       // toggle WLAN LED quickly to indicate connection try
+      //delay(FAST_BLINK);
+      //digitalWrite(CLIENT_WLAN_LED, LOW);                        // toggle WLAN LED quickly to indicate connection try
+      //delay(FAST_BLINK);
+      //yield();
+      controlLed(CLIENT_RGB_BRIGHTNESS, false);
     } //end if(packetSize)
     if (serviceRequest == true)                                   //do service routine if isr has set the service flag
       doService();
@@ -370,25 +407,7 @@ void wlanInit(void){
   
   //Send infos about client
   Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-  String cycle_msg = CLIENT_INFO_MSG;
-  #ifdef CLIENT_ESP32
-   cycle_msg += String("ESP32; ");
-  #else
-   cycle_msg += String("ESP8266; ");
-  #endif
-  #ifdef DEBUG
-   cycle_msg += String("DEBUG; ");
-  #else
-   cycle_msg += String("NO DEBUG; ");
-  #endif
-  #ifdef CYCLETIME
-   cycle_msg += String("CYCLETIME; ");
-  #else
-   cycle_msg += String("NO CYCLETIME; ");
-  #endif
-  cycle_msg += clientVersion;
-  cycle_msg += String("; ");
-  cycle_msg += clientHwPcbRevision;
+  String cycle_msg = collectClientData();
   #ifdef DEBUG
     Serial.printf("wlanInit(): Sending UDP message with client infos: %s\n", cycle_msg.c_str());
   #endif
@@ -401,34 +420,39 @@ void wlanInit(void){
 }//end void WlanInit()
 
 
-void controlLed(uint8_t brightness) {
+void controlLed(uint8_t brightness, bool fading) {
   // brightness is currently only used in RGB mode 
   #ifdef CLIENT_RGB_LED   // one RGB LED for all states
-    if(states.touchState){  // current touch state has LED Priority over all other LEDs
-      pixels.setPixelColor(0, pixels.Color(0, 0, brightness)); // Blue rgb(0,0,255)
-    }else{
-      if (!states.wlanComplete){
-        pixels.setPixelColor(0, pixels.Color(brightness, static_cast<float>(brightness)*0.65, 0)); // Orange rgb(255,165,0); rgb(100%,65%,0%)
-        if (states.wlanCompleteBlink){
-          pixels.show();   // Send the updated pixel colors to the hardware.
-          delay(SLOW_BLINK);
-          pixels.setPixelColor(0, pixels.Color(0, 0, 0)); // switch off
-          pixels.show();   // Send the updated pixel colors to the hardware.
-          delay(SLOW_BLINK);
-        }
-      }else{
-        if (states.batteryError || states.rssiError || states.touchStateError || states.aliveCounterError){
-          pixels.setPixelColor(0, pixels.Color(brightness, 0, 0)); // red rgb(255,0,0)
+      if (!fading){ // special case LED fading at power up and power down /sleep
+        if(states.touchState){  // current touch state has LED Priority over all other LEDs
+          pixels.setPixelColor(0, pixels.Color(0, 0, brightness)); // Blue rgb(0,0,255)
         }else{
-          if (digitalRead(CLIENT_CHARGE_IN) == LOW){
+          if (!states.wlanComplete){
+            pixels.setPixelColor(0, pixels.Color(brightness, static_cast<float>(brightness)*0.65, 0)); // Orange rgb(255,165,0); rgb(100%,65%,0%)
+            if (states.wlanCompleteBlink){
+              pixels.show();   // Send the updated pixel colors to the hardware.
+              delay(SLOW_BLINK);
+              pixels.setPixelColor(0, pixels.Color(0, 0, 0)); // switch off
+              pixels.show();   // Send the updated pixel colors to the hardware.
+              delay(SLOW_BLINK);
+            }
+          }else{  //if(!states.wlanComplete)
+            if (states.batteryError || states.rssiError || states.touchStateError || states.aliveCounterError){
+              pixels.setPixelColor(0, pixels.Color(brightness, 0, 0)); // red rgb(255,0,0)
+            }else{
+              if (digitalRead(CLIENT_CHARGE_IN) == LOW){
+                pixels.setPixelColor(0, pixels.Color(0, brightness, 0)); // green rgb(0,255,0)
+              }else{ //if none of the above applys, make LED white to indicate, that the sensor is on power
+                pixels.setPixelColor(0, pixels.Color(brightness, brightness, brightness)); // white rgb(255,255,255)
+              } //end if battery charging
+            } //end if error
+          } //end if(states.wlanComplete)
+        } //end if states.touchState
+      }else{ //if (!fading)
             pixels.setPixelColor(0, pixels.Color(0, brightness, 0)); // green rgb(0,255,0)
-          }else{ //if none of the above applys, make LED white to indicate, that the sensor is on power
-            pixels.setPixelColor(0, pixels.Color(brightness, brightness, brightness)); // white rgb(255,255,255)
-          } //end if battery charging
-        } //end if error
-      } //end if states.wlanComplete
-    } //end if states.touchState
-    pixels.show();   // Send the updated pixel colors to the hardware.
+            pixels.show();   // Send the updated pixel colors to the hardware.
+      } //if (!fading)
+      pixels.show();   // Send the updated pixel colors to the hardware.
   #else // dedicated LEDs for the states
     digitalWrite(CLIENT_POWER_LED, LOW);                     // switch on power LED
 
@@ -448,7 +472,6 @@ void controlLed(uint8_t brightness) {
       digitalWrite(CLIENT_ERROR_OUT, HIGH);                  // switch off light if no error is reported
   #endif
 } //end controlRgbLed
-
 
 
 static inline void initIo(void) {
@@ -476,8 +499,20 @@ static inline void initIo(void) {
   #endif
   
   digitalWrite(CLIENT_SLEEP_OUT,  HIGH);          // switch on output to prevent external sleep hardware to send cpu and board to sleep
-  controlLed(CLIENT_RGB_BRIGHTNESS);              // set all LEDs
+  //controlLed(CLIENT_RGB_BRIGHTNESS, false);              // set all LEDs
 }
+
+
+static inline void goAlive(){
+  #ifdef DEBUG
+    Serial.println("goAlive(): Going alive");
+  #endif
+  states.wlanCompleteBlink = false;            // stop blinking when going to sleep
+   for(int i =0; i <= CLIENT_RGB_BRIGHTNESS; i = i + 1){
+     controlLed(i, true);// decrease LED brightness during shutdown and indicate fading is true
+     delay(RGB_FADE_SPEED);
+   } // for
+}  // goAlive()
 
 
 static inline void goSleep(){
@@ -486,17 +521,19 @@ static inline void goSleep(){
       Serial.println("goSleep(): Going to sleep");
     #endif
     // LED shutdown
+    states.wlanCompleteBlink = false;                      // stop blinking when going to sleep
     for(int i = CLIENT_RGB_BRIGHTNESS; i >= 0; i = i - 1){
-      controlLed(i);
+      controlLed(i, true);                                 // decrease LED brightness during shutdown and indicate fading is true
       delay(RGB_FADE_SPEED);
-    }
-    digitalWrite(CLIENT_SLEEP_OUT, LOW);                 // switch off external power
-  }else{
+    } //end for
+    delay(1000);
+    digitalWrite(CLIENT_SLEEP_OUT, LOW);                   // switch off external power
+  }else{  // if(!((NO_SLEEP_WHILE_CHARGING)
   #ifdef DEBUG
     Serial.println("goSleep(): Not going to sleep while charging");
   #endif
   }
-} // end void goSleep()
+} //end void goSleep()
 
 
 void setup(void) {
@@ -505,6 +542,7 @@ void setup(void) {
     Serial.println("setup(): I am the 3D Touch Probe Sensor Client");
   #endif
   initIo();
+  goAlive();
 
   //Setup timer interrup for service routines
   #ifdef CLIENT_ESP32
@@ -523,23 +561,24 @@ void setup(void) {
 
 
 void loop(void){
+
   //reconnect to server if connection got lost
-   if (states.wlanComplete == false){
+  if (states.wlanComplete == false){
     #ifdef DEBUG
       Serial.printf("loop(): Lost connection to server, need to re-init wlan connection\n");
     #endif
     wlanInit();
-   }
-  
+  }
+   
   // do pin polling instead of interrupt, check for state changes high->low or low->high
-  if ((digitalRead(CLIENT_TOUCH_IN) == HIGH) && (states.touchState == LOW)){
+  if ((digitalRead(CLIENT_TOUCH_IN) == (HIGH != CLIENT_TOUCH_POLARITY)) && (states.touchState == LOW)){  // if current internal state LOW and Pin high
     doSensorHigh();
-    delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
+    //delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   }
   
-  if ((digitalRead(CLIENT_TOUCH_IN) == LOW) && (states.touchState == HIGH)){
+  if ((digitalRead(CLIENT_TOUCH_IN) == (LOW != CLIENT_TOUCH_POLARITY)) && (states.touchState == HIGH)){
     doSensorLow();
-    delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
+    //delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   }
 
   //increase the counter, if an LOW/HIGH acknowledge from the server is pending
@@ -558,7 +597,7 @@ void loop(void){
         doSensorLow();                                    // server did not answer to low message from client, re-transmit
         ackCounterLow   = 0;                              // reset counter for re-transmitting low message
         states.touchStateError = true;                           // indicate error by red LED
-        controlLed(CLIENT_RGB_BRIGHTNESS);
+        controlLed(CLIENT_RGB_BRIGHTNESS, false);
      }
    }
 
@@ -571,7 +610,7 @@ void loop(void){
         doSensorHigh();                                   // server did not answer to low message from client, re-transmit
         ackCounterHigh  = 0;                              // reset counter for re-transmitting low message
         states.touchStateError = true;                           // indicate error by red LED
-        controlLed(CLIENT_RGB_BRIGHTNESS);
+        controlLed(CLIENT_RGB_BRIGHTNESS, false);
      }
    }
   
@@ -672,14 +711,14 @@ void loop(void){
         Udp.endPacket();
       #endif
       return;
-    }
+    } // end if(!strcmp(packetBuffer, CLIENT_TOUCH_LOW_MSG))
     
     //receiving unknown UDP message
     #ifdef DEBUG
       Serial.println("loop(): Received unknown command by UDP");
       Serial.println(packetBuffer);
     #endif
-  }//if (packetSize)
+  } // end if(packetSize)
 
   if (serviceRequest == true)        //do service routine if isr has set the service flag
       doService();

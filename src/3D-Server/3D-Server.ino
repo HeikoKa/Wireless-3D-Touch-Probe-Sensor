@@ -1,7 +1,7 @@
  /*  Server
   *   
   *  @author Heiko Kalte  
-  *  @date 08.02.2025 
+  *  @date 14.02.2025 
   */
 
 
@@ -9,6 +9,8 @@
 //TODO
 // * when checking for lost client connection, better check, if the expected client IP adress is not connected instead of counting the connections 
 // * are round trip tick measurement for ESP32 the same as for ESP8266?
+// client status resetten, wenn WLAN got lost
+// data structure for client status
 
 char *serverVersion = "V02.02";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
@@ -325,7 +327,7 @@ void wlanInit(){
   #ifdef DEBUG
     Serial.print("wlanInit(): Waiting for clients to connect");
   #endif
-
+  
   while(WiFi.softAPgetStationNum() < 1){                              // loop until the first client connects, can be a false client. Better check for the right IP address of the connected client
     #ifdef DEBUG
       Serial.print(".");
@@ -372,6 +374,8 @@ void wlanInit(){
     
     // listen for UDP respond from client
     int packetSize = Udp.parsePacket();
+    // ####################### check for expected remote ip addresse
+    //if ((packetSize) && (!strcmp(Udp.remoteIP().toString().c_str(), clientIpAddr.toString().c_str()))){ //check client address
     if (packetSize){
       // udp packet received
       int len = Udp.read(packetBuffer, UDP_PACKET_MAX_SIZE);
@@ -392,7 +396,7 @@ void wlanInit(){
           Udp.write(SERVER_REPLY_MSG);
         #endif
         Udp.endPacket();        
-      }
+      }  // if(!strcmp (packetBuffer, CLIENT_HELLO_MSG))
       // at this point a client is connected and UDP messages have been exchanged
       wlan_complete = true;                                     // WLAN connection is complete, stop listening for further incoming UPD packages
       digitalWrite(SERVER_WLAN_LED, LOW);                       // switch on WLAN connection LED to indicate sucessfull connection
