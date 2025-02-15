@@ -29,17 +29,17 @@ The following picture shows the 3D-Touch-Probe in a ATC tool holder BT30. The ro
 * Many more
 
 ## Content of the repository
-* C/C++ code for ESP8266 client and server
+* C/C++ code for ESP32 and ESP8266 client and server
 * 3D Fusion 360 model of the 3d touch sensor (not yet)
-* Schematic of the electronics of both ESP8266 boards (not yet)
+* Schematic of the electronics of both ESP32 and ESP8266 boards (not yet)
 * Eding CNC macro for inner/outer center finding (not yet)
 * Picture of the hardware and picture during build
 * Videos of the function
 * Bill of material (not yet)
 
 ## Getting Started
-* get two D1 Mini Pro (ESP8266) and two mirco USB cables (not just a power USB cable it must support the serial communication)
-* download and setup Arduine IDE for the ESP8266
+* get two ESP32 (or ESP8266) boards and two USB-C cables (not just a power USB cable it must support the serial communication)
+* download and setup Arduine IDE for the ESP32 or ESP8266
 * download the repository (client, server und header file)
 * adjust the include file path in the server and client file (because Arduino IDE does not support relative include paths)
 * enable DEBUG mode in the header file for the first runs to get as many infos as possible
