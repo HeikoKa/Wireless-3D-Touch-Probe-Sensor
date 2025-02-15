@@ -1,23 +1,21 @@
- /*  Server
+ /*  3D Sensor Sever/Basestation
   *   
   *  @author Heiko Kalte  
-  *  @date 14.02.2025 
+  *  @date 15.02.2025 
+  *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
 
-
-
 //TODO
-// * when checking for lost client connection, better check, if the expected client IP adress is not connected instead of counting the connections 
 // * are round trip tick measurement for ESP32 the same as for ESP8266?
-// client status resetten, wenn WLAN got lost
-// data structure for client status
+// * data structure for client status
+// * include service calls in wlan init
 
-char *serverVersion = "V02.02";
+// Arduino ESP32-WROOM-DA module used
+
+char *serverSwVersion = "V03.00";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <Adafruit_NeoPixel.h>
-//#include <WS2812FX.h>
 #ifdef SERVER_ESP32
     #include <WiFi.h>
   #else //ESP8266
@@ -43,7 +41,7 @@ bool          wlan_complete              = false;               // global variab
 bool          msg_lost                   = false;               // did a UDP message got lost
 int           client_alive_counter       = 0;                   // current client alive counter
 WiFiUDP       Udp;                                              // UDP object
-int           rssi;
+int           rssi;                                             // Wifi signal strength
 int           serverHwPcbRevision        = 0;                   // From baestation/server PCB revision 3 onwards the revision can be read out from the PCB coded by 3 input bit
 volatile bool serviceRequest             = false;               // interrupt service can request a service intervall by this flag
 char          packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
@@ -121,9 +119,9 @@ char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info r
         String message = "<h1>Webserver 3D Touch Probe</h1>";
         message += "<h3>by Heiko Kalte (h.kalte@gmx.de)</h3>";
         message += "<p> Server SW version: ";
-        message += serverVersion;
+        message += serverSwVersion;
         message += "</p>";
-        message += "<p> Server Shardware PCB version: ";
+        message += "<p> Server hardware PCB version: ";
         message += serverHwPcbRevision;
         message += "</p>";
         message += "<p>Server IP: ";
@@ -206,13 +204,13 @@ char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info r
 
 
 static inline void sendAliveMsg(){
-  if(wlan_complete){                                      // check if WLAN connection is established
+  if(wlan_complete){                                         // check if WLAN connection is established
     Udp.beginPacket(clientIpAddr, clientUdpPort);
     // udp.write(message,11); //Nachrichten text und länge
     #ifdef SERVER_ESP32
       Udp.printf(SERVER_ALIVE_MSG);                          // send alive messages to client
     #else //ESP8266
-      Udp.write(SERVER_ALIVE_MSG);                          // send alive messages to client
+      Udp.write(SERVER_ALIVE_MSG);                           // send alive messages to client
     #endif
     Udp.endPacket();
     #ifdef DEBUG
@@ -230,7 +228,7 @@ static inline void checkClientStatus(){
   if(wlan_complete){  //if WLAN connection is established, check status of client
   
     // check if client is alive
-    if (client_alive_counter > CLIENT_ALIVE_CNT_MAX){
+    if (client_alive_counter >= CLIENT_ALIVE_CNT_MAX){
       #ifdef DEBUG
          Serial.printf("checkClientStatus(): Client alive messages are missing\n");
       #endif 
@@ -317,6 +315,12 @@ void IRAM_ATTR  serviceIsr(){                               // timer interrupt f
 
 
 void wlanInit(){
+  
+  digitalWrite(SERVER_BAT_ALM_LED, HIGH);                   // reset battery alarm for client if client is no connected yet or not connected anymore
+  #ifdef SERVER_HW_REVISION_3_0
+    digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY);
+  #endif
+
   #ifdef DEBUG
     Serial.printf("\nwlanInit(): Soft-AP server IP: ");
     serverIpAddr = WiFi.softAPIP();                       // the server IP is set earlier, so WIFI.softAPIP() should not result in a different IP
@@ -346,7 +350,7 @@ void wlanInit(){
     yield();
     if (serviceRequest == true)        //do service routine if isr has set the service flag
       doService();
-  } //waiting for clients to connect either 3D touch probe client or a webbrowser if webserver is enabled
+  } //while(WiFi.softAPgetStationNum() < 1)
 
   #ifdef DEBUG
     Serial.println("Ready");
@@ -374,8 +378,6 @@ void wlanInit(){
     
     // listen for UDP respond from client
     int packetSize = Udp.parsePacket();
-    // ####################### check for expected remote ip addresse
-    //if ((packetSize) && (!strcmp(Udp.remoteIP().toString().c_str(), clientIpAddr.toString().c_str()))){ //check client address
     if (packetSize){
       // udp packet received
       int len = Udp.read(packetBuffer, UDP_PACKET_MAX_SIZE);
@@ -436,6 +438,9 @@ void setup(){
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                     // Setup Serial Interface with baud rate
     Serial.println("setup(): I am the 3D Touch Probe Sensor Server/Basestation");
+    Serial.println("setup(): Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)");
+    Serial.printf("setup(): My software version is: %s", serverSwVersion);
+    Serial.println();
   #endif
 
   //initialize digital input/output pins
@@ -483,11 +488,11 @@ void setup(){
   digitalWrite(SERVER_SLEEP_LED,   HIGH);                        // switch off sleep request LED
   
   #ifdef SERVER_HW_REVISION_3_0
-  //write default values of digital outputs to CNC controller. From hardware version 3.0 two outputs are utilized, one to control the LED and one to control the output to the CNC controller
-   digitalWrite(SERVER_WLAN_OUT,    LOW != SERVER_WLAN_OUT_POLARITY);    // Default value for WLAN output, considering the polarity
-   digitalWrite(SERVER_TOUCH_OUT,   LOW != SERVER_TOUCH_OUT_POLARITY);   // Default value for Touch output, considering the polarity
-   digitalWrite(SERVER_ERROR_OUT,   LOW != SERVER_ERROR_OUT_POLARITY);   // Default value for ERROR output, considering the polarity
-   digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY); // Default value for Battery alarm output, considering the polarity
+    //write default values of digital outputs to CNC controller. From hardware version 3.0 two outputs are utilized, one to control the LED and one to control the output to the CNC controller
+    digitalWrite(SERVER_WLAN_OUT,    LOW != SERVER_WLAN_OUT_POLARITY);    // Default value for WLAN output, considering the polarity
+    digitalWrite(SERVER_TOUCH_OUT,   LOW != SERVER_TOUCH_OUT_POLARITY);   // Default value for Touch output, considering the polarity
+    digitalWrite(SERVER_ERROR_OUT,   LOW != SERVER_ERROR_OUT_POLARITY);   // Default value for ERROR output, considering the polarity
+    digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY); // Default value for Battery alarm output, considering the polarity
   #endif
 
   //Setup Soft-AP
@@ -524,7 +529,6 @@ void setup(){
 
 
 
-
 void loop(){
   char* errCheck;
     
@@ -532,8 +536,7 @@ void loop(){
     server.handleClient();  ////handle client access if webserver is enabled
   #endif
     
-  // check if WLAN client got lost
-  // better check would be compare the client IP address to the expected client IP address, other webbrowsers connections are clients as well
+  // check if WLAN client got lost. Better check would be compare the client IP address to the expected client IP address, other webbrowsers connections are clients as well
   if ((WiFi.softAPgetStationNum() < 1)||(wlan_complete == false)){
     wlan_complete = false;
     #ifdef DEBUG
@@ -542,9 +545,8 @@ void loop(){
     wlanInit();
   } //if (WiFi)
 
-  // send sleep message to client if the server input pin is low (CNC does not need the sensor in the next minutes). It is asumed to use an inverting transistor at the sleep input
+  // send sleep message to client if the server input pin is low, because CNC does not need the sensor in the next minutes, save battery. It is asumed to use an inverting transistor at the sleep input.
   if (((digitalRead(SERVER_SLEEP_IN) == HIGH)&&(SERVER_SLEEP_IN_POLARITY)) || ((digitalRead(SERVER_SLEEP_IN) == LOW)&&(!SERVER_SLEEP_IN_POLARITY))){
-    digitalWrite(SERVER_SLEEP_LED, LOW);                        // indicate sleep request by LED
     #ifdef DEBUG
       Serial.printf("loop(): CNC controller wants to send the client asleep\n");
     #endif
@@ -555,6 +557,14 @@ void loop(){
       Udp.write(SERVER_SLEEP_MSG);
     #endif
     Udp.endPacket();
+    digitalWrite(SERVER_SLEEP_LED, LOW);                        // indicate sleep request by LED
+    //reset some client status infos after sending the client asleep
+    wlan_complete = false;                                      // set Wifi incomplete
+    clientBatteryStatus = CLIENT_BAT_OK;                        // set battery to ok, to switch off alarm led
+    digitalWrite(SERVER_BAT_ALM_LED, HIGH);
+    #ifdef SERVER_HW_REVISION_3_0
+      digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY);  // indicated good battery to CNC controller 
+    #endif
   } // end if (digitalRead)
 
   // receive incoming UDP packets

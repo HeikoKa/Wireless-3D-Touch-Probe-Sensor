@@ -1,7 +1,7 @@
 /**  Header
   *   
   *  @author Heiko Kalte  
-  *  @date 09.02.2025 
+  *  @date 15.02.2025 
   * 
   *  @version 0.2
   */
@@ -73,7 +73,8 @@ namespace CncSensor{
   const int          TOUCH_PIN_DEBOUNCE      = 700;                       // debounce time in µs for touch input pin
   const bool         NO_SLEEP_WHILE_CHARGING = false;                     // prevent sleeping during battery loading, e.g. to keep status LED on
   const uint8_t      CLIENT_RGB_BRIGHTNESS   = 20;                        // brightness of the RGB LED (max 255). Product of CLIENT_RGB_BRIGHTNESS x RGB_FADE_SPEED = Fading Time at start and end
-  const uint8_t      RGB_FADE_SPEED          = 100;                       // speed for fading out the LED brightness when going to sleep. Set as delay, smaller value faster fading
+  const uint8_t      CLIENT_RGB_FADE_SPEED   = 100;                       // speed for fading out the LED brightness when going to sleep. Set as delay, smaller value faster fading
+  const bool         CLIENT_ALLOW_LED_FADING = true;                      // allow fading LED at startup and sleep. Leads to longer startup time, but looks nice.
   const bool         CLIENT_TOUCH_POLARITY   = true;                      // invert sensor touch input
   //client and server consts
   const uint32_t     SERVICE_INTERVALL       = 4615385;     //~15sec      // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
@@ -107,7 +108,7 @@ namespace CncSensor{
     //ESP32 Server specific LEDs
     #ifdef SERVER_HW_REVISION_3_0
       // Sensor Basestation hardware version 3.0 distinguishs between outputs for LED and output for CNC controller
-        const uint8_t     SERVER_POWER_LED        = 14;                   // #####################Power LED, is not used
+        const uint8_t     SERVER_POWER_LED        = 14;                   // Attention: Power LED, is not used in ESP32 PCB versions
         const uint8_t     SERVER_WLAN_LED         = 21;                   // LED to inducate the current WLAN state
         const uint8_t     SERVER_TOUCH_LED        = 32;                   // LED to indicate a Touch of the 3D sensor
         const uint8_t     SERVER_ERROR_LED        = 19;                   // Error output that can e.g tell the cnc controller to stop
@@ -122,7 +123,7 @@ namespace CncSensor{
     #else //SERVER_HW_REVISION_3_0
         //Following Data is valid for the Sensor Basestation PCB hardware version 1.0 and 2.0
         //ESP32 Server specific LEDs
-        const uint8_t     SERVER_POWER_LED        = 22;                   // Power LED  (AUXIO1)
+        const uint8_t     SERVER_POWER_LED        = 22;                   // Attention: Power LED, is not used in ESP32 PCB versions
         const uint8_t     SERVER_WLAN_LED         = 5;                    // LED to inducate the current WLAN state
         const uint8_t     SERVER_TOUCH_LED        = 17;                   // LED to indicate a touch of the 3D sense
         const uint8_t     SERVER_ERROR_LED        = 23;                   // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client
@@ -148,21 +149,21 @@ namespace CncSensor{
   #ifdef CLIENT_ESP32
     //ESP32Client specific LEDs
     #ifdef CLIENT_RGB_LED
-      const uint8_t     CLIENT_RGB_LED_OUT        = 27;                    // client rgb led instead of multiple leds
+      const uint8_t     CLIENT_RGB_LED_OUT        = 27;                   // client rgb led instead of multiple leds
     #else //#ifdef CLIENT_RGB_LED
-      const uint8_t     CLIENT_POWER_LED          = 5;                    // Power LED 
+      const uint8_t     CLIENT_POWER_LED          = 5;                    // Attention: Power LED, is not used in ESP32 PCB versions
       const uint8_t     CLIENT_WLAN_LED           = 6;                    // LED to inducate the current WLAN state
       const uint8_t     CLIENT_ERROR_OUT          = 14;                   // LED to indicate error
       const uint8_t     CLIENT_TOUCH_LED          = 15;                   // LED to indicate a touch of the 3D sensor
     #endif //#ifdef CLIENT_RGB_LED
-    const uint8_t     CLIENT_TOUCH_IN             = 33;                    // digital input pin to listen
+    const uint8_t     CLIENT_TOUCH_IN             = 33;                   // digital input pin to listen
     const uint8_t     CLIENT_SLEEP_OUT            = 4;                    // controls external sleep hardware
-    const uint8_t     CLIENT_ANALOG_CHANNEL       = 26;                    // Analog In channel for reading the battery voltage
-    const uint8_t     CLIENT_CHARGE_IN            = 25;                    // Battery Charging Input
+    const uint8_t     CLIENT_ANALOG_CHANNEL       = 26;                   // Analog In channel for reading the battery voltage
+    const uint8_t     CLIENT_CHARGE_IN            = 25;                   // Battery Charging Input
     
-    const uint8_t     CLIENT_HW_REVISION_0         = 19;                  // (Supported by client PCB version 2.0 and later) The client hardware PCB revision is coded into 3 input bit, this is bit 0
-    const uint8_t     CLIENT_HW_REVISION_1         = 22;                  // (Supported by client PCB version 2.0 and later)The client hardware PCB revision is coded into 3 input bit, this is bit 1
-    const uint8_t     CLIENT_HW_REVISION_2         = 21;                  // (Supported by client PCB version 2.0 and later)The client hardware PCB revision is coded into 3 input bit, this is bit 2
+    const uint8_t     CLIENT_HW_REVISION_0        = 19;                   // (Supported by client PCB version 2.0 and later) The client hardware PCB revision is coded into 3 input bit, this is bit 0
+    const uint8_t     CLIENT_HW_REVISION_1        = 22;                   // (Supported by client PCB version 2.0 and later)The client hardware PCB revision is coded into 3 input bit, this is bit 1
+    const uint8_t     CLIENT_HW_REVISION_2        = 21;                   // (Supported by client PCB version 2.0 and later)The client hardware PCB revision is coded into 3 input bit, this is bit 2
 
   #else //#ifdef CLIENT_ESP32
     //ESP8266 Client specific LEDs

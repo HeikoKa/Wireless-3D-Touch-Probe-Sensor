@@ -1,14 +1,16 @@
 /**  3D Sensor Client
   *   
   *  @author Heiko Kalte  
-  *  @date 14.02.2025 
+  *  @date 15.02.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
   
-  //TODO/Suggestions
+  // TODO/Suggestions
   // man könnte die verschiedenen Errors batteryError, rssiError, touchStateError, aliveCounterError auch durch unterschiedliche Farben oder Blinken anzeigen
 
-char *clientSwVersion = "V02.01";
+  // Using Arduino ESP32 PICO-D4 (but ist is a ESP32 PICO V3-02 device)
+
+char *clientSwVersion = "V02.00";
 #include <WiFiUdp.h>
 #include <Ticker.h>
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
@@ -66,7 +68,7 @@ statesType states;
   }
 #endif
 
-#ifdef CLIENT_RGB_LED   // kann das auch in die IO Init, vermutlich nicht, weil es dann nicht global genug ist#########################
+#ifdef CLIENT_RGB_LED
   Adafruit_NeoPixel pixels(1, CLIENT_RGB_LED_OUT, NEO_GRB + NEO_KHZ800);
 #endif
 
@@ -120,14 +122,14 @@ static inline void doSensorLow(void){
 
 
 static inline void checkAliveCounter(void){
-  if (server_alive_cnt < SERVER_ALIVE_CNT_MAX){
+  if (server_alive_cnt <= SERVER_ALIVE_CNT_MAX){
     #ifdef DEBUG
       Serial.printf("checkAliveCounter(): Server alive counter current: %d, max reconnect: %d, max server dead: %d\n", server_alive_cnt, SERVER_ALIVE_CNT_MAX, SERVER_ALIVE_CNT_DEAD);
     #endif
     server_alive_cnt++;                                          // increase "the server has not answered" alive counter
     states.aliveCounterError = false;                            // no error, no red LED
   }else{
-    if (server_alive_cnt < SERVER_ALIVE_CNT_DEAD){
+    if (server_alive_cnt <= SERVER_ALIVE_CNT_DEAD){
       // server alive messages are missing, but try to reconnect
       #ifdef DEBUG
         Serial.printf("checkAliveCounter(): No server alive udp message during %d service intervals.\n", server_alive_cnt);
@@ -247,7 +249,7 @@ static inline void checkWlanStatus(void) {
     } // end if(rssi < WIFI_RSSI_REPORT_LEVEL)
   } //end if(states.wlanComplete)
 
-  // ##### doppelte abfrage nach states.wlanComplete
+  // ##### twice check of states.wlanComplete == true, this could be imrpoved
   if (states.wlanComplete == true){
     Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
     String cycle_msg = CLIENT_RSSI_MSG + String(rssi);   // pack message and rssi in the UDP frame
@@ -327,11 +329,12 @@ void wlanInit(void){
     Serial.println("\n");
     Serial.printf("wlanInit(): Connecting to %s ", SSID);
   #endif
-  states.wlanCompleteBlink = true;                        // ############### das wird niergends abgestellt ####### switch on blinking
+  states.wlanCompleteBlink = true;                        // switch on blinking
   WiFi.begin(SSID, password);                             // connect to WLAN 
   while (WiFi.status() != WL_CONNECTED){                  // stay in this loop until a WLAN connection could be established
-    controlLed(CLIENT_RGB_BRIGHTNESS, false);                    // blink WLAN LED until WLAN is established 
-    delay(WLAN_INIT_PAUSE);                               // ############## wirkt sich das nicht auf das Blinken aus? #### wait for a moment before checking connection again
+    controlLed(CLIENT_RGB_BRIGHTNESS, false);             // blink WLAN LED until WLAN is established 
+    if (!states.wlanCompleteBlink)                        // if blinking is enabled, do not add an additional delay
+      delay(WLAN_INIT_PAUSE);                             // wait for a moment before checking connection again
     yield();
     #ifdef DEBUG
       Serial.print(".");
@@ -425,17 +428,17 @@ void controlLed(uint8_t brightness, bool fading) {
   #ifdef CLIENT_RGB_LED   // one RGB LED for all states
       if (!fading){ // special case LED fading at power up and power down /sleep
         if(states.touchState){  // current touch state has LED Priority over all other LEDs
-          pixels.setPixelColor(0, pixels.Color(0, 0, brightness)); // Blue rgb(0,0,255)
+          pixels.setPixelColor(0, pixels.Color(0, 0, brightness)); // Blue rgb(0,0,255) for touch
         }else{
           if (!states.wlanComplete){
-            pixels.setPixelColor(0, pixels.Color(brightness, static_cast<float>(brightness)*0.65, 0)); // Orange rgb(255,165,0); rgb(100%,65%,0%)
+            pixels.setPixelColor(0, pixels.Color(brightness, static_cast<float>(brightness)*0.65, 0)); // WLAN init, Orange rgb(255,165,0); rgb(100%,65%,0%)
             if (states.wlanCompleteBlink){
               pixels.show();   // Send the updated pixel colors to the hardware.
               delay(SLOW_BLINK);
               pixels.setPixelColor(0, pixels.Color(0, 0, 0)); // switch off
               pixels.show();   // Send the updated pixel colors to the hardware.
               delay(SLOW_BLINK);
-            }
+            } //if(states.wlanCompleteBlink)
           }else{  //if(!states.wlanComplete)
             if (states.batteryError || states.rssiError || states.touchStateError || states.aliveCounterError){
               pixels.setPixelColor(0, pixels.Color(brightness, 0, 0)); // red rgb(255,0,0)
@@ -448,11 +451,11 @@ void controlLed(uint8_t brightness, bool fading) {
             } //end if error
           } //end if(states.wlanComplete)
         } //end if states.touchState
-      }else{ //if (!fading)
-            pixels.setPixelColor(0, pixels.Color(0, brightness, 0)); // green rgb(0,255,0)
-            pixels.show();   // Send the updated pixel colors to the hardware.
-      } //if (!fading)
-      pixels.show();   // Send the updated pixel colors to the hardware.
+      }else{ //if(!fading)
+        pixels.setPixelColor(0, pixels.Color(brightness, brightness, brightness));        // white LED during fading
+        pixels.show();                                                                    // Send the updated pixel colors to the hardware.
+      } //if(!fading)
+      pixels.show();                                                                      // Send the updated pixel colors to the hardware.
   #else // dedicated LEDs for the states
     digitalWrite(CLIENT_POWER_LED, LOW);                     // switch on power LED
 
@@ -480,26 +483,25 @@ static inline void initIo(void) {
   #endif
 
   #ifdef CLIENT_RGB_LED
-    pixels.begin();                               // initialize NeoPixel RBG LED
-  #else                                           // initialize digital output pins for simple LEDs
-    pinMode(CLIENT_POWER_LED,  OUTPUT);           // LED to show power is on
-    pinMode(CLIENT_WLAN_LED,   OUTPUT);           // LED to show WLAN connection state
-    pinMode(CLIENT_ERROR_OUT,  OUTPUT);           // Error LED
-    pinMode(CLIENT_TOUCH_LED,  OUTPUT);           // Touch LED visual output
+    pixels.begin();                                               // initialize NeoPixel RBG LED
+  #else                                                           // initialize digital output pins for simple LEDs
+    pinMode(CLIENT_POWER_LED,  OUTPUT);                           // LED to show power is on
+    pinMode(CLIENT_WLAN_LED,   OUTPUT);                           // LED to show WLAN connection state
+    pinMode(CLIENT_ERROR_OUT,  OUTPUT);                           // Error LED
+    pinMode(CLIENT_TOUCH_LED,  OUTPUT);                           // Touch LED visual output
   #endif
-  pinMode(CLIENT_SLEEP_OUT,    OUTPUT);           // control external sleep hardware
-  pinMode(CLIENT_TOUCH_IN,     INPUT_PULLUP);     // set DIO to input with pullup
-  pinMode(CLIENT_CHARGE_IN,    INPUT_PULLUP);     // set DIO to input with pullup
+  pinMode(CLIENT_SLEEP_OUT,    OUTPUT);                           // control external sleep hardware
+  pinMode(CLIENT_TOUCH_IN,     INPUT_PULLUP);                     // set DIO to input with pullup
+  pinMode(CLIENT_CHARGE_IN,    INPUT_PULLUP);                     // set DIO to input with pullup
  
   #ifdef CLIENT_HW_REVISION_2_0
-    pinMode(CLIENT_HW_REVISION_0, INPUT);                        // client hardware PCB revision bit 0 (only for PCB revision 2.0 or later)
-    pinMode(CLIENT_HW_REVISION_1, INPUT);                        // client hardware PCB revision bit 1 (only for PCB revision 2.0 or later)
-    pinMode(CLIENT_HW_REVISION_2, INPUT);                        // client hardware PCB revision bit 2 (only for PCB revision 2.0 or later)
+    pinMode(CLIENT_HW_REVISION_0, INPUT);                         // client hardware PCB revision bit 0 (only for PCB revision 2.0 or later)
+    pinMode(CLIENT_HW_REVISION_1, INPUT);                         // client hardware PCB revision bit 1 (only for PCB revision 2.0 or later)
+    pinMode(CLIENT_HW_REVISION_2, INPUT);                         // client hardware PCB revision bit 2 (only for PCB revision 2.0 or later)
     clientHwPcbRevision = (digitalRead(CLIENT_HW_REVISION_2) << 2) + (digitalRead(CLIENT_HW_REVISION_1)<< 1) + digitalRead(CLIENT_HW_REVISION_0); //construct version number from 3 input bit
   #endif
   
-  digitalWrite(CLIENT_SLEEP_OUT,  HIGH);          // switch on output to prevent external sleep hardware to send cpu and board to sleep
-  //controlLed(CLIENT_RGB_BRIGHTNESS, false);              // set all LEDs
+  digitalWrite(CLIENT_SLEEP_OUT,  HIGH);                          // switch on output to prevent external sleep hardware to send cpu and board to sleep
 }
 
 
@@ -507,11 +509,13 @@ static inline void goAlive(){
   #ifdef DEBUG
     Serial.println("goAlive(): Going alive");
   #endif
-  states.wlanCompleteBlink = false;            // stop blinking when going to sleep
-   for(int i =0; i <= CLIENT_RGB_BRIGHTNESS; i = i + 1){
-     controlLed(i, true);// decrease LED brightness during shutdown and indicate fading is true
-     delay(RGB_FADE_SPEED);
-   } // for
+  if(CLIENT_ALLOW_LED_FADING){
+    states.wlanCompleteBlink = false;                             // stop blinking when going to sleep
+    for(int i =0; i <= CLIENT_RGB_BRIGHTNESS; i = i + 1){
+      controlLed(i, true);                                        // decrease LED brightness during shutdown and indicate fading is true
+      delay(CLIENT_RGB_FADE_SPEED);
+    } // for
+  } // if(CLIENT_ALLOW_LED_FADING)
 }  // goAlive()
 
 
@@ -521,42 +525,45 @@ static inline void goSleep(){
       Serial.println("goSleep(): Going to sleep");
     #endif
     // LED shutdown
-    states.wlanCompleteBlink = false;                      // stop blinking when going to sleep
-    for(int i = CLIENT_RGB_BRIGHTNESS; i >= 0; i = i - 1){
-      controlLed(i, true);                                 // decrease LED brightness during shutdown and indicate fading is true
-      delay(RGB_FADE_SPEED);
-    } //end for
+    if(CLIENT_ALLOW_LED_FADING){
+      states.wlanCompleteBlink = false;                                         // stop blinking when going to sleep
+      for(int i = CLIENT_RGB_BRIGHTNESS; i >= 0; i = i - 1){
+        controlLed(i, true);                                                    // decrease LED brightness during shutdown and indicate fading is true
+        delay(CLIENT_RGB_FADE_SPEED);
+      } //end for
+    } //if(CLIENT_ALLOW_LED_FADING)
     delay(1000);
-    digitalWrite(CLIENT_SLEEP_OUT, LOW);                   // switch off external power
+    digitalWrite(CLIENT_SLEEP_OUT, LOW);                                        // switch off external power
   }else{  // if(!((NO_SLEEP_WHILE_CHARGING)
   #ifdef DEBUG
     Serial.println("goSleep(): Not going to sleep while charging");
   #endif
-  }
+  } // if(!((NO_SLEEP_WHILE_CHARGING)
 } //end void goSleep()
 
 
 void setup(void) {
   #ifdef DEBUG
-    Serial.begin(BAUD_RATE);                                 // Setup Serial Interface with baud rate
+    Serial.begin(BAUD_RATE);                                                    // Setup Serial Interface with baud rate
     Serial.println("setup(): I am the 3D Touch Probe Sensor Client");
+    Serial.println("setup(): Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)");
   #endif
   initIo();
   goAlive();
 
   //Setup timer interrup for service routines
   #ifdef CLIENT_ESP32
-    serviceTimer = timerBegin(1000000);                        // Set timer frequency to 1MHz
-    timerAttachInterrupt(serviceTimer, &serviceIsr);           // Attach onTimer function to our timer. 
-    timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);// Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
+    serviceTimer = timerBegin(1000000);                                         // Set timer frequency to 1MHz
+    timerAttachInterrupt(serviceTimer, &serviceIsr);                            // Attach onTimer function to our timer. 
+    timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);                 // Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
     timerStart(serviceTimer);
   #else //ESP8266
     timer1_attachInterrupt(serviceIsr);
-    timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);             // DIV256 means one tick is 3.2us, total intervall time is 3.2us x SERVICE_INTERVALL, max is ~27 sec
-    timer1_write(SERVICE_INTERVALL);                           // has to start early, to allow the client to go to sleep, if the server is dead
+    timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);                              // DIV256 means one tick is 3.2us, total intervall time is 3.2us x SERVICE_INTERVALL, max is ~27 sec
+    timer1_write(SERVICE_INTERVALL);                                            // has to start early, to allow the client to go to sleep, if the server is dead
   #endif
 
-  wlanInit();                                                // Init wlan communication with server
+  wlanInit();                                                                   // Init wlan communication with server
 } //end setup()
 
 
@@ -669,9 +676,9 @@ void loop(void){
         Serial.println("loop(): Detected HIGH acknowledge message from server.");
       #endif
       high_command_acknowledge = true;
-      ackCounterHigh           = 0;                       // reset counter, when receiving the server acknowledge message
+      ackCounterHigh           = 0;                                             // reset counter, when receiving the server acknowledge message
       #ifdef CYCLETIME
-        eTimeHigh = asm_ccount();             //take end time for client to server to client cycle time measurement
+        eTimeHigh = asm_ccount();                                               //take end time for client to server to client cycle time measurement
         #ifdef DEBUG
           Serial.printf("loop(): Measured UDP cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(eTimeHigh - bTimeHigh)));
         #endif
