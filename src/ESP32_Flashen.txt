@@ -1,1 +1,0 @@
-https://forum.arduino.cc/t/bin-file-auf-leeren-esp32-laden-via-esp32-flash-tool/1252485/2
