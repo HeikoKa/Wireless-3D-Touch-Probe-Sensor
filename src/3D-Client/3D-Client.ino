@@ -7,7 +7,7 @@
   
   // TODO/Suggestions
   // man könnte die verschiedenen Errors batteryError, rssiError, touchStateError, aliveCounterError auch durch unterschiedliche Farben oder Blinken anzeigen
-
+  // battery laoding could be send to the server to be displayed in the webserver
   // Using Arduino ESP32 PICO-D4 (but ist is a ESP32 PICO V3-02 device)
 
 char *clientSwVersion = "V02.00";
@@ -156,12 +156,11 @@ static inline void checkBatteryVoltage(void){
   String cycle_msg;
   // measure battery voltage
   #ifdef CLIENT_ESP32
-    //uint32_t analogVolts = analogReadMilliVolts(CLIENT_ANALOG_CHANNEL);
     analogVolts =analogRead(CLIENT_ANALOG_CHANNEL);
-    float batVoltage = 2*analogVolts/1000;                          // Battery Voltage is divided by 2 by resistors on PCB
+    float batVoltage = 6.6*analogVolts/4096 + BAT_CORRECTION;                          // Battery Voltage is divided by 2 by resistors on PCB
   #else
     int analogVolts = ESP.getVcc();
-    float batVoltage = analogVolts / 1000.0;
+    float batVoltage = analogVolts / 1000.0 + BAT_CORRECTION;
   #endif
   
   if (batVoltage < BAT_LOW_VOLT){
@@ -431,7 +430,8 @@ void controlLed(uint8_t brightness, bool fading) {
           pixels.setPixelColor(0, pixels.Color(0, 0, brightness)); // Blue rgb(0,0,255) for touch
         }else{
           if (!states.wlanComplete){
-            pixels.setPixelColor(0, pixels.Color(brightness, static_cast<float>(brightness)*0.65, 0)); // WLAN init, Orange rgb(255,165,0); rgb(100%,65%,0%)
+            //pixels.setPixelColor(0, pixels.Color(brightness, static_cast<float>(brightness)*0.65, 0)); // WLAN init, Orange rgb(255,165,0); rgb(100%,65%,0%)
+            pixels.setPixelColor(0, pixels.Color(brightness, brightness, brightness)); // WLAN init, Orange rgb(255,165,0); rgb(100%,65%,0%)
             if (states.wlanCompleteBlink){
               pixels.show();   // Send the updated pixel colors to the hardware.
               delay(SLOW_BLINK);
@@ -520,6 +520,11 @@ static inline void goAlive(){
 
 
 static inline void goSleep(){
+    #ifdef DEBUG
+      Serial.printf("goSleep(): NO_SLEEP_WHILE_CHARGING             : %d\n", NO_SLEEP_WHILE_CHARGING);
+      Serial.printf("goSleep(): digitalRead(CLIENT_CHARGE_IN) == LOW: %d\n", digitalRead(CLIENT_CHARGE_IN) == LOW);
+    #endif  
+
   if (!((NO_SLEEP_WHILE_CHARGING) && (digitalRead(CLIENT_CHARGE_IN) == LOW))){   // prevent goint to sleep if battery is charging and the NO_SLEEP_WHILE_CHARGING flag is set
     #ifdef DEBUG
       Serial.println("goSleep(): Going to sleep");

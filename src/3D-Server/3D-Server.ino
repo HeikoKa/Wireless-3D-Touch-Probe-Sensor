@@ -7,10 +7,11 @@
 
 //TODO
 // * are round trip tick measurement for ESP32 the same as for ESP8266?
-// * data structure for client status
+// * data structure for client status and webserver status
 // * include service calls in wlan init
+// * divide clients string for webserver in iduvidual parts (ESP Type, Debug, CYCLE, Software and Hardware version)
 
-// Arduino ESP32-WROOM-DA module used
+// Use Arduino IDE with board package ESP32-WROOM-DA
 
 char *serverSwVersion = "V03.00";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"

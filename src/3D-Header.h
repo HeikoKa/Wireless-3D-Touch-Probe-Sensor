@@ -17,8 +17,8 @@
 
 //## user defines start ##
 //general defines
-#define DEBUG                 // enable debug output via serial interface on client and server
-#define CYCLETIME             // enable measuring the round trip delay from client to server back to client
+//#define DEBUG                 // enable debug output via serial interface on client and server
+//#define CYCLETIME             // enable measuring the round trip delay from client to server back to client
 
 // server/basestation specific defines
 #define SERVER_ESP32            // defines server as a ESP32 instead of a ESP8266, comment out to switch to ESP8266
@@ -71,7 +71,7 @@ namespace CncSensor{
   const int          SERVER_ALIVE_CNT_DEAD   = 2;                         // maximum server alive counter value, server seems to be dead
   const int          SERVER_AQUN_CNT_MAX     = 2000;                      // number of loop cycles before the server must acknowledge the high/low messages
   const int          TOUCH_PIN_DEBOUNCE      = 700;                       // debounce time in µs for touch input pin
-  const bool         NO_SLEEP_WHILE_CHARGING = false;                     // prevent sleeping during battery loading, e.g. to keep status LED on
+  const bool         NO_SLEEP_WHILE_CHARGING = true;                      // prevent sleeping during battery loading, e.g. to keep status LED on
   const uint8_t      CLIENT_RGB_BRIGHTNESS   = 20;                        // brightness of the RGB LED (max 255). Product of CLIENT_RGB_BRIGHTNESS x RGB_FADE_SPEED = Fading Time at start and end
   const uint8_t      CLIENT_RGB_FADE_SPEED   = 100;                       // speed for fading out the LED brightness when going to sleep. Set as delay, smaller value faster fading
   const bool         CLIENT_ALLOW_LED_FADING = true;                      // allow fading LED at startup and sleep. Leads to longer startup time, but looks nice.
@@ -95,8 +95,9 @@ namespace CncSensor{
   unsigned int      clientUdpPort           = 4210;                       // client port
 
   //Battery consts
-  const float       BAT_LOW_VOLT            = 3.50;                       // battery voltage below this, is indicated as low battery state
-  const float       BAT_CRIT_VOLT           = 3.43;                       // battery voltage below this, is indicated as critical battery state
+  const float       BAT_LOW_VOLT            = 3.7;                       // battery voltage below this, is indicated as low battery state
+  const float       BAT_CRIT_VOLT           = 3.6;                       // battery voltage below this, is indicated as critical battery state
+  const float       BAT_CORRECTION          = 0.2;                        // use this correction for the battery voltage if analog measure differs from multimeter measure
   const char*       CLIENT_BAT_OK_MSG       = "bat ok";                   // UDP message for battery voltage is ok
   const int         CLIENT_BAT_OK           = 1;                          // internal coding for battery is ok
   const char*       CLIENT_BAT_LOW_MSG      = "bat low";                  // UDP message for battery is low 
@@ -158,7 +159,7 @@ namespace CncSensor{
     #endif //#ifdef CLIENT_RGB_LED
     const uint8_t     CLIENT_TOUCH_IN             = 33;                   // digital input pin to listen
     const uint8_t     CLIENT_SLEEP_OUT            = 4;                    // controls external sleep hardware
-    const uint8_t     CLIENT_ANALOG_CHANNEL       = 26;                   // Analog In channel for reading the battery voltage
+    const uint8_t     CLIENT_ANALOG_CHANNEL       = 38;                   // Analog In channel for reading the battery voltage
     const uint8_t     CLIENT_CHARGE_IN            = 25;                   // Battery Charging Input
     
     const uint8_t     CLIENT_HW_REVISION_0        = 19;                   // (Supported by client PCB version 2.0 and later) The client hardware PCB revision is coded into 3 input bit, this is bit 0
