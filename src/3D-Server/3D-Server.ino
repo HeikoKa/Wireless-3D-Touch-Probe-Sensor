@@ -10,6 +10,7 @@
 // * data structure for client status and webserver status
 // * include service calls in wlan init
 // * divide clients string for webserver in iduvidual parts (ESP Type, Debug, CYCLE, Software and Hardware version)
+// * store and display multiple battery voltage values for the webserver display (non volatile memory)
 
 // Use Arduino IDE with board package ESP32-WROOM-DA
 

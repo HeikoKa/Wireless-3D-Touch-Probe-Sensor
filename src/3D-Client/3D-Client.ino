@@ -6,8 +6,11 @@
   */
   
   // TODO/Suggestions
-  // man könnte die verschiedenen Errors batteryError, rssiError, touchStateError, aliveCounterError auch durch unterschiedliche Farben oder Blinken anzeigen
-  // battery laoding could be send to the server to be displayed in the webserver
+  // * code the different errors batteryError, rssiError, touchStateError, aliveCounterError different blinking fequencies
+  // * battery laoding could be send to the server to be displayed in the webserver
+  // * store the last x voltage values of the battery
+
+
   // Using Arduino ESP32 PICO-D4 (but ist is a ESP32 PICO V3-02 device)
 
 char *clientSwVersion = "V02.00";
@@ -296,7 +299,8 @@ static inline void doService(void){
   checkAliveCounter();                                    // check server alive counter in service
   sendAliveMsg();                                         // send client alive in service
   checkWlanStatus();                                      // check WLAN status and signal strength
-  controlLed(CLIENT_RGB_BRIGHTNESS, false);                      // set LED(s)
+  controlLed(CLIENT_RGB_BRIGHTNESS, false);               // set LED(s)
+  states.touchStateError          = false;                       //################################ reset transmit Error
   #ifdef CLIENT_ESP32
     portENTER_CRITICAL_ISR(&timerMux);                 // protect access to serviceRequest 
   #endif
@@ -585,12 +589,12 @@ void loop(void){
   // do pin polling instead of interrupt, check for state changes high->low or low->high
   if ((digitalRead(CLIENT_TOUCH_IN) == (HIGH != CLIENT_TOUCH_POLARITY)) && (states.touchState == LOW)){  // if current internal state LOW and Pin high
     doSensorHigh();
-    //delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
+    delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   }
   
   if ((digitalRead(CLIENT_TOUCH_IN) == (LOW != CLIENT_TOUCH_POLARITY)) && (states.touchState == HIGH)){
     doSensorLow();
-    //delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
+    delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   }
 
   //increase the counter, if an LOW/HIGH acknowledge from the server is pending

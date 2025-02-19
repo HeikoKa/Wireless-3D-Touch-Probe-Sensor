@@ -17,7 +17,7 @@
 
 //## user defines start ##
 //general defines
-//#define DEBUG                 // enable debug output via serial interface on client and server
+#define DEBUG                 // enable debug output via serial interface on client and server
 //#define CYCLETIME             // enable measuring the round trip delay from client to server back to client
 
 // server/basestation specific defines
