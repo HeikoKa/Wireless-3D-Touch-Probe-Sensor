@@ -1,0 +1,56 @@
+setup() I am the 3D Touch Probe Sensor Client
+setup() Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)
+goAlive() Going alive
+
+wlanInit() Connecting to 3D-Touch-WIFI .... connected to WLAN network
+wlanInit() Sending hello message to IP 192.168.2.1, UDP port 4211
+wlanInit() No respond from server yet
+wlanInit() Sending hello message to IP 192.168.2.1, UDP port 4211
+wlanInit() UDP packet received 5 bytes from 192.168.2.1, port 4211
+WlanInit() Detected server hello message during WlanInit(), send a reply
+wlanInit() WLAN is complete
+wlanInit() Sending Wifi message with client infos: INFO:ESP32; DEBUG On; CYCLETIME Off; V02.00; 0
+doSensorHigh() Sending HIGH message
+loop() Detected server hello command, send a reply
+loop() Detected server hello command, send a reply
+loop() Detected server hello command, send a reply
+loop() Detected server hello command, send a reply
+loop() Detected HIGH acknowledge message from server (counter value: 5, max counter: 2000, transmission error: 0)
+loop() Detected server alive command
+doSensorLow() Sending LOW message
+loop() Detected LOW acknowledge message from server (counter value: 279, max counter: 2000, transmission error: 0)
+doSensorHigh() Sending HIGH message
+loop() Detected HIGH acknowledge message from server (counter value: 211, max counter: 2000, transmission error: 0)
+doSensorLow() Sending LOW message
+loop() Detected LOW acknowledge message from server (counter value: 265, max counter: 2000, transmission error: 0)
+doSensorHigh() Sending HIGH message
+loop() Detected HIGH acknowledge message from server (counter value: 659, max counter: 2000, transmission error: 0)
+doSensorLow() Sending LOW message
+loop() Detected LOW acknowledge message from server (counter value: 178, max counter: 2000, transmission error: 0)
+
+doService() ***** start service *****
+checkBatteryVoltage() Bat Voltage is ok, measured value is 3.92V (low bat is 3.70V and critical bat is 3.60V)
+checkAliveCounter() Server alive counter current: 0, max reconnect: 1, max server dead: 2
+sendAliveMsg() Sending Wifi alive message to server
+checkWlanStatus() WLAN signal strength is ok, RSSI:-45
+doService() ***** end service *****
+
+doSensorHigh() Sending HIGH message
+loop() Detected HIGH acknowledge message from server (counter value: 186, max counter: 2000, transmission error: 0)
+doSensorLow() Sending LOW message
+loop() Detected LOW acknowledge message from server (counter value: 395, max counter: 2000, transmission error: 0)
+loop() Detected server alive command
+doSensorHigh() Sending HIGH message
+loop() Detected HIGH acknowledge message from server (counter value: 205, max counter: 2000, transmission error: 0)
+doSensorLow() Sending LOW message
+loop() Detected LOW acknowledge message from server (counter value: 200, max counter: 2000, transmission error: 0)
+
+doService() ***** start service *****
+checkBatteryVoltage() Bat Voltage is ok, measured value is 3.92V (low bat is 3.70V and critical bat is 3.60V)
+checkAliveCounter() Server alive counter current: 0, max reconnect: 1, max server dead: 2
+sendAliveMsg() Sending Wifi alive message to server
+checkWlanStatus() WLAN signal strength is ok, RSSI:-41
+doService() ***** end service *****
+
+loop() Detected server alive command
+

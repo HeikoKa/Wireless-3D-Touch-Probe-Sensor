@@ -41,8 +41,8 @@ long       rssi;                                             // WLAN signal stre
 bool       serviceRequest           = false;                 // interrupt service can request a service intervall by this flag
 int        clientHwPcbRevision      = 0;                     // From client PCB version 2 onwards the version can be read out from the PCB coded by 3 input bit
 int        analogVolts              = 0;
-struct statesType
-{
+uint32_t   transmitCounter          = 0;                      // counter for identify each sended Wifi message 
+struct statesType{
     bool    touchState               = LOW;                   // current touch sensor state
     bool    charging                 = false;                 // global variable to indicate if battery is charging
     bool    wlanComplete             = false;                 // global variable to indicate if wlan connection is established completely
@@ -72,8 +72,12 @@ statesType states;
 
 Adafruit_NeoPixel pixels(1, CLIENT_RGB_LED_OUT, NEO_GRB + NEO_KHZ800);
 
+
 static inline bool sendWifiMessage(String msg, bool blocking, bool udp)
 {
+  // TODO: counter that will be transmitted to identify the correct response
+  transmitCounter++;  // increment identifier each time sendWifiMessage() is called
+  // msg = msg + String(transmitCounter); //add transmitCounter to message
 	if (udp){
 		Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());          // send UDP packet to server to indicate the 3D touch change 
 		#ifdef CLIENT_ESP32
@@ -85,6 +89,7 @@ static inline bool sendWifiMessage(String msg, bool blocking, bool udp)
 		if(blocking){
 			//########## blocking begin
       //##### while no answer
+      // #### transmitCounter
         if(!strcmp(packetBuffer, msg.c_str())){    // check if exactly the same message comes back from server
         #ifdef DEBUG
           Serial.println("loop() Detected acknowledge message from server.");
@@ -109,12 +114,14 @@ static inline bool sendWifiMessage(String msg, bool blocking, bool udp)
 			return false;
 		} //if(blocking)
 		return true;
-	}else{ // not upd message
-		// tcp or others
-    return false; // not implemented yet
-	}
+	}else{ //if(udp), not upd message tcp or others
+    #ifdef DEBUG
+      Serial.println("sendWifiMessage() Non-UDP message transmition is not implemented yet.");
+    #endif
+    return false;
+	} //if(udp)
 	return false;
-}
+} //sendWifiMessage()
 
 
  static inline void doSensorHigh(void){
@@ -124,18 +131,18 @@ static inline bool sendWifiMessage(String msg, bool blocking, bool udp)
   #endif
   String high_msg;
   #ifdef DEBUG
-    Serial.println(CLIENT_TOUCH_HIGH_MSG);
+    Serial.println("doSensorHigh() Sending HIGH message");
   #endif
   if (states.wlanComplete){
-      high_msg = CLIENT_TOUCH_HIGH_MSG + String(states.transmissionError); // put the current touch error state into the UDP message
+    high_msg = CLIENT_TOUCH_HIGH_MSG + String(states.transmissionError); // put the current touch error state into the UDP message
 	  sendWifiMessage(high_msg, false, true);
-      // rückgabewert überprüfen und blocking einbauen
+    // check return value
 	  high_command_acknowledge = false;                           // set acknowledge to false until the server responses with the same command
-      states.touchState        = HIGH;                            // remember the current state
-      controlLed(NONE);                                           // set LED immediately
-      #ifdef CYCLETIME
-        bTimeHigh = asm_ccount();                                 // take begin time for client to server to client cycle time measurement
-      #endif
+    states.touchState        = HIGH;                            // remember the current state
+    controlLed(NONE);                                           // set LED immediately
+    #ifdef CYCLETIME
+      bTimeHigh = asm_ccount();                                 // take begin time for client to server to client cycle time measurement
+    #endif
   } // end if (states.wlanComplete)
 } // end void doSensorHigh(void)
 
@@ -147,15 +154,15 @@ static inline void doSensorLow(void){
   #endif
   String low_msg;
   #ifdef DEBUG
-    Serial.println(CLIENT_TOUCH_LOW_MSG);
+    Serial.println("doSensorLow() Sending LOW message");
   #endif
   if (states.wlanComplete){
     low_msg = CLIENT_TOUCH_LOW_MSG + String(states.transmissionError); // put the current touch error state into the UDP message
-	sendWifiMessage(low_msg, false, true);
-      // rückgabewert überprüfen und blocking einbauen
+	  sendWifiMessage(low_msg, false, true);
+    // return value 
     low_command_acknowledge = false;                    // set acknowledge to false until the server responses with the same command
     states.touchState       = LOW;                      // remember the current state
-    controlLed(NONE); // set LED immediately
+    controlLed(NONE);                                   // set LED immediately
     #ifdef CYCLETIME
       bTimeLow = asm_ccount();                          // take begin time for client to server to client cycle time measurement
     #endif
@@ -279,6 +286,7 @@ String collectClientData(void){
   return msg;
 } // collectClientData(void)
 
+
 static inline void checkWlanStatus(void) {
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("checkWlanStatus() running on core ");
@@ -308,7 +316,7 @@ static inline void checkWlanStatus(void) {
     } // end if(rssi < WIFI_RSSI_REPORT_LEVEL)
   } //end if(states.wlanComplete)
 
-  // ##### twice check of states.wlanComplete == true, this could be imrpoved
+  // ##### twice check of states.wlanComplete == true, this could be improved
   if (states.wlanComplete == true){
     String cycle_msg = CLIENT_RSSI_MSG + String(rssi);   // pack message and rssi in the UDP frame
 	  sendWifiMessage(cycle_msg, false, true);
@@ -428,7 +436,7 @@ void wlanInit(void){
           packetBuffer[len] = '\0';
         if(!strcmp(packetBuffer, SERVER_HELLO_MSG)){
           #ifdef DEBUG
-            Serial.println("initWlan() Detected server hello message during initWlan(), send a reply");
+            Serial.println("WlanInit() Detected server hello message during WlanInit(), send a reply");
           #endif
 		  sendWifiMessage(CLIENT_REPLY_MSG, false, true);
         } // end if(!strcmp(packetBuffer, SERVER_HELLO_MSG))
@@ -474,7 +482,6 @@ void controlLed(fadingType fading){
     Serial.println(xPortGetCoreID());
   #endif
 
-  // brightness is currently only used in RGB mode 
   if (fading == NONE){ // special case LED fading at power up and power down /sleep
     if(states.touchState){  // current touch state has LED Priority over all other LEDs
       pixels.setPixelColor(0, pixels.Color(TOUCH_COLOR)); 
@@ -505,7 +512,7 @@ void controlLed(fadingType fading){
                   pixels.setPixelColor(0, pixels.Color(BATTERY_ERROR_COLOR));
                 }else{ //if none of the above applys, make LED white to indicate, that the sensor is on power
                   pixels.setPixelColor(0, pixels.Color(POWER_COLOR));
-                } //end if battery charging
+                }
               }
             }
           }
@@ -558,18 +565,44 @@ static inline void initIo(void) {
   digitalWrite(CLIENT_SLEEP_OUT,  HIGH);                          // switch on output to prevent external sleep hardware to send cpu and board to sleep
 }
 
+void showStateColors(void){
+  //show all RGB color
+  pixels.setPixelColor(0, pixels.Color(CHARGE_COLOR));
+  pixels.show();
+  delay(SLOW_BLINK);
+  pixels.setPixelColor(0, pixels.Color(TOUCH_COLOR));
+  pixels.show();
+  delay(SLOW_BLINK);
+  pixels.setPixelColor(0, pixels.Color(WLAN_COLOR));
+  pixels.show();
+  delay(SLOW_BLINK);
+  pixels.setPixelColor(0, pixels.Color(RSSI_ERROR_COLOR));
+  pixels.show();
+  delay(SLOW_BLINK);
+  pixels.setPixelColor(0, pixels.Color(BATTERY_ERROR_COLOR));
+  pixels.show();
+  delay(SLOW_BLINK);
+  pixels.setPixelColor(0, pixels.Color(WIFI_ERROR_COLOR));
+  pixels.show();
+  delay(SLOW_BLINK);
+  pixels.setPixelColor(0, pixels.Color(ALIVE_ERRROR_COLOR));
+  pixels.show();
+  delay(SLOW_BLINK);
+}
 
-static inline void goAlive(){
+void goAlive(void){
   #ifdef DEBUG
     Serial.println("goAlive() Going alive");
   #endif
   states.wlanCompleteBlink = false;                             // stop blinking when going to sleep
   controlLed(UP); 
+  #ifdef SHOW_STATE_COLORS
+    showStateColors();
+  #endif
 }  // goAlive()
 
 
-static inline void goSleep(){  
-
+void goSleep(){  
   if (!((NO_SLEEP_WHILE_CHARGING) && (digitalRead(CLIENT_CHARGE_IN) == LOW))){   // prevent goint to sleep if battery is charging and the NO_SLEEP_WHILE_CHARGING flag is set
     #ifdef DEBUG
       Serial.println("goSleep() Going to sleep");
@@ -608,7 +641,6 @@ void setup(void) {
     timer1_write(SERVICE_INTERVALL);                                            // has to start early, to allow the client to go to sleep, if the server is dead
   #endif
   
-
   wlanInit();                                                                   // Init wlan communication with server
 } //end setup()
 
@@ -631,8 +663,8 @@ void loop(void){
   if (states.charging != (digitalRead(CLIENT_CHARGE_IN) == LOW)){
     #ifdef DEBUG
       Serial.printf("loop() charging state changed, calling checkBatteryVoltage()\n");
-      //Serial.printf(states.charging);
-      //Serial.printf(digitalRead(CLIENT_CHARGE_IN)==LOW);
+      Serial.println(states.charging);
+      Serial.println(digitalRead(CLIENT_CHARGE_IN)==LOW);
     #endif
     checkBatteryVoltage();
     controlLed(NONE); // set LED immediately
@@ -658,29 +690,29 @@ void loop(void){
 
    //Re-send LOW messages to server if server does not reply within time out (avoid cnc crash during sensing)
    if (ackCounterLow > SERVER_AQUN_CNT_MAX){
-     if(low_command_acknowledge == false){
+     if (low_command_acknowledge == false){
         #ifdef DEBUG
           Serial.printf("loop() Acknowledge timeout error for LOW message, trying to re-transmit\n");
         #endif
-        doSensorLow();                                    // server did not answer to low message from client, re-transmit
-        ackCounterLow   = 0;                              // reset counter for re-transmitting low message
-        states.transmissionError = true;                           // indicate error by red LED
-        controlLed(NONE); // set LED immediately
-     }
-   }
+        doSensorLow();                                        // server did not answer to low message from client, re-transmit
+        ackCounterLow   = 0;                                  // reset counter for re-transmitting low message
+        states.transmissionError = true;                      // indicate error by red LED
+        controlLed(NONE);                                     // set LED immediately
+     } //if(low_command_acknowledge == false)
+   } //if(ackCounterLow > SERVER_AQUN_CNT_MAX)
 
    //Re-send HIGH messages to server if server does not reply within time out (avoid CNC crash during sensing)
    if (ackCounterHigh > SERVER_AQUN_CNT_MAX){
-     if(high_command_acknowledge == false){
+     if (high_command_acknowledge == false){
         #ifdef DEBUG
           Serial.printf("loop() Acknowledge timeout error for HIGH message, trying to re-transmit\n");
         #endif
-        doSensorHigh();                                   // server did not answer to low message from client, re-transmit
-        ackCounterHigh  = 0;                              // reset counter for re-transmitting low message
-        states.transmissionError = true;                           // indicate error by red LED
-        controlLed(NONE); // set LED immediately
-     }
-   }
+        doSensorHigh();                                       // server did not answer to low message from client, re-transmit
+        ackCounterHigh  = 0;                                  // reset counter for re-transmitting low message
+        states.transmissionError = true;                      // indicate error by red LED
+        controlLed(NONE);                                     // set LED immediately
+     } //if (high_command_acknowledge == false)
+   } //if (ackCounterHigh > SERVER_AQUN_CNT_MAX)
   
   // check for UDP commands from server
   int packetSize = Udp.parsePacket();
@@ -728,7 +760,7 @@ void loop(void){
     // receiving HIGH acknowledge message from server
     if(!strcmp(packetBuffer, CLIENT_TOUCH_HIGH_MSG)){
       #ifdef DEBUG
-        Serial.println("loop() Detected HIGH acknowledge message from server.");
+        Serial.printf("loop() Detected HIGH acknowledge message from server (counter value: %d, max counter: %d, transmission error: %d)\n", ackCounterHigh, SERVER_AQUN_CNT_MAX, states.transmissionError);
       #endif
       high_command_acknowledge = true;
       ackCounterHigh           = 0;                                             // reset counter, when receiving the server acknowledge message
@@ -747,7 +779,7 @@ void loop(void){
     //receiving LOW acknowledge message from server
     if(!strcmp(packetBuffer, CLIENT_TOUCH_LOW_MSG)){
       #ifdef DEBUG
-        Serial.println("loop() Detected LOW acknowledge message from server.");
+        Serial.printf("loop() Detected LOW acknowledge message from server (counter value: %d, max counter: %d, transmission error: %d)\n", ackCounterLow, SERVER_AQUN_CNT_MAX, states.transmissionError);
       #endif
       low_command_acknowledge = true;
       ackCounterLow           = 0;
@@ -759,7 +791,7 @@ void loop(void){
         //send cycles to server e.g. to be displayed by the webserver
         String cycle_msg = CLIENT_CYCLE_MSG + String((uint32_t)(eTimeLow - bTimeLow)); // pack end-time minus begin-time into a message
 		    sendWifiMessage(cycle_msg.c_str(), false, true);
-      #endif
+      #endif //CYCLETIME
       return;
     } // end if(!strcmp(packetBuffer, CLIENT_TOUCH_LOW_MSG))
     

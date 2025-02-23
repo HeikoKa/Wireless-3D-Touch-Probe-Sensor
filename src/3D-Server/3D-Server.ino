@@ -583,15 +583,17 @@ void loop(){
         digitalWrite(SERVER_TOUCH_OUT, HIGH != SERVER_TOUCH_OUT_POLARITY);  // indicate touch high to CNC controller 
       #endif
       char *highMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_HIGH_MSG);        // cut/decode additional information out of the client message
-      if (!strncmp (highMsgAttach, "1", strlen("1")))
+      if (!strncmp (highMsgAttach, "1", strlen("1")))                             // decode the next 0 or 1 after the message text, this is an info about lost messages
         msg_lost = true;
       #ifdef DEBUG
         Serial.printf("loop(): Client touch is high. Sending back the status. Attachment is %s\n", highMsgAttach);
       #endif
       Udp.beginPacket(clientIpAddr, clientUdpPort);
       #ifdef SERVER_ESP32
+        // ############### better resend the original message with message and ID for identifying response 
         Udp.printf(CLIENT_TOUCH_HIGH_MSG);
       #else //ESP8266
+      // ############### better resend the original message with message and ID for identifying response
         Udp.write(CLIENT_TOUCH_HIGH_MSG);
       #endif
       Udp.endPacket();
@@ -604,16 +606,18 @@ void loop(){
       #ifdef SERVER_HW_REVISION_3_0
         digitalWrite(SERVER_TOUCH_OUT, LOW != SERVER_TOUCH_OUT_POLARITY);  // indicate touch low to CNC controller 
       #endif
-      char *lowMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_LOW_MSG);        // cut/decode additional information out of the client message
-      if (!strncmp (lowMsgAttach, "1", strlen("1")))
+      char *lowMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_LOW_MSG);    // cut/decode additional information out of the client message
+      if (!strncmp (lowMsgAttach, "1", strlen("1")))                       // decode the next 0 or 1 after the message text, this is an info about lost messages
         msg_lost = true;
       #ifdef DEBUG
           Serial.printf("loop(): Client touch is low. Sending back the status. Attachment is %s\n", lowMsgAttach);
       #endif
       Udp.beginPacket(clientIpAddr, clientUdpPort);
       #ifdef SERVER_ESP32
+        // ############### better resend the original message with message and ID for identifying response
         Udp.printf(CLIENT_TOUCH_LOW_MSG);
       #else //ESP8266
+        // ############### better resend the original message with message and ID for identifying response
         Udp.write(CLIENT_TOUCH_LOW_MSG);
       #endif
       Udp.endPacket();
