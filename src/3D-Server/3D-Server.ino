@@ -1,7 +1,7 @@
  /*  3D Sensor Sever/Basestation
   *   
   *  @author Heiko Kalte  
-  *  @date 15.02.2025 
+  *  @date 26.02.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
 
@@ -9,8 +9,9 @@
 // * are round trip tick measurement for ESP32 the same as for ESP8266?
 // * data structure for client status and webserver status
 // * include service calls in wlan init
-// * divide clients string for webserver in iduvidual parts (ESP Type, Debug, CYCLE, Software and Hardware version)
 // * store and display multiple battery voltage values for the webserver display (non volatile memory)
+// * are there any mem leaks?
+// * all sending action in a sendWifi() function
 
 // Use Arduino IDE with board package ESP32-WROOM-DA
 
@@ -47,7 +48,16 @@ int           rssi;                                             // Wifi signal s
 int           serverHwPcbRevision        = 0;                   // From baestation/server PCB revision 3 onwards the revision can be read out from the PCB coded by 3 input bit
 volatile bool serviceRequest             = false;               // interrupt service can request a service intervall by this flag
 char          packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
-char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info received by UDP to display client info in webserver
+
+struct statesType{
+    String    micro       = "";                                 // micro controller of the client
+    String    debug       = "";                                 // was debug enabled during client compilation
+    String    cycle       = "";                                 // was cycletime measurement enabled durcing client compilation
+    String    swVersion   = "";                                 // software version of the client
+    String    hwVersion   = "";                                 // PCB or hardware version of the client
+    String    charging    = "";                                 // global variable to indicate if battery is charging (not used at the moment)
+    }; 
+statesType clientStates;
 
 #ifdef SERVER_ESP32
   hw_timer_t *serviceTimer            = NULL;
@@ -154,8 +164,24 @@ char          clientInfo[UDP_PACKET_MAX_SIZE];                  // client info r
         #else
           message += "<p>Server CYCLETIME: no</p>";
         #endif
-        message += "<p>Client Infos: ";
-        message += clientInfo;
+        message += "<p>Client Infos: </p>";
+        message += "<p> ";
+        message += clientStates.micro;
+        message += "</p>";
+        message += "<p> ";
+        message += clientStates.debug;
+        message += "</p>";
+        message += "<p> ";
+        message += clientStates.cycle;
+        message += "</p>";
+        message += "<p> ";
+        message += clientStates.swVersion;
+        message += "</p>";
+        message += "<p> ";
+        message += clientStates.hwVersion;
+        message += "</p>";
+        message += "<p> ";
+        message += clientStates.charging;
         message += "</p>";
      
         if (client_alive_counter < CLIENT_ALIVE_CNT_MAX)
@@ -547,7 +573,7 @@ void loop(){
     wlanInit();
   } //if (WiFi)
 
-  // send sleep message to client if the server input pin is low, because CNC does not need the sensor in the next minutes, save battery. It is asumed to use an inverting transistor at the sleep input.
+  // send SLEEP message to client if the server input pin is low, because CNC does not need the sensor in the next minutes, save battery. It is asumed to use an inverting transistor at the sleep input.
   if (((digitalRead(SERVER_SLEEP_IN) == HIGH)&&(SERVER_SLEEP_IN_POLARITY)) || ((digitalRead(SERVER_SLEEP_IN) == LOW)&&(!SERVER_SLEEP_IN_POLARITY))){
     #ifdef DEBUG
       Serial.printf("loop(): CNC controller wants to send the client asleep\n");
@@ -562,7 +588,7 @@ void loop(){
     digitalWrite(SERVER_SLEEP_LED, LOW);                        // indicate sleep request by LED
     //reset some client status infos after sending the client asleep
     wlan_complete = false;                                      // set Wifi incomplete
-    clientBatteryStatus = CLIENT_BAT_OK;                        // set battery to ok, to switch off alarm led
+    clientBatteryStatus = CLIENT_BAT_OK;                        // set back battery to ok, to switch off alarm led
     digitalWrite(SERVER_BAT_ALM_LED, HIGH);
     #ifdef SERVER_HW_REVISION_3_0
       digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY);  // indicated good battery to CNC controller 
@@ -576,7 +602,7 @@ void loop(){
     if (len > 0)
       packetBuffer[len] = '\0';
 
-    //received client sensor high command
+    //received client sensor HIGH command
     if (!strncmp (packetBuffer, CLIENT_TOUCH_HIGH_MSG, strlen(CLIENT_TOUCH_HIGH_MSG))){
       digitalWrite(SERVER_TOUCH_LED, LOW);                                              // indicate current touch state by LED
       #ifdef SERVER_HW_REVISION_3_0
@@ -591,16 +617,18 @@ void loop(){
       Udp.beginPacket(clientIpAddr, clientUdpPort);
       #ifdef SERVER_ESP32
         // ############### better resend the original message with message and ID for identifying response 
-        Udp.printf(CLIENT_TOUCH_HIGH_MSG);
+        Udp.printf(packetBuffer);
+        //Udp.printf(CLIENT_TOUCH_HIGH_MSG);
       #else //ESP8266
       // ############### better resend the original message with message and ID for identifying response
-        Udp.write(CLIENT_TOUCH_HIGH_MSG);
+        Udp.write(packetBuffer);
+        //Udp.write(CLIENT_TOUCH_HIGH_MSG);
       #endif
       Udp.endPacket();
       return;
     }
 
-    //received client sensor low command
+    //received client sensor LOW command
     if (!strncmp (packetBuffer, CLIENT_TOUCH_LOW_MSG, strlen(CLIENT_TOUCH_LOW_MSG))){
       digitalWrite(SERVER_TOUCH_LED, HIGH);
       #ifdef SERVER_HW_REVISION_3_0
@@ -615,57 +643,67 @@ void loop(){
       Udp.beginPacket(clientIpAddr, clientUdpPort);
       #ifdef SERVER_ESP32
         // ############### better resend the original message with message and ID for identifying response
-        Udp.printf(CLIENT_TOUCH_LOW_MSG);
+        Udp.printf(packetBuffer);
+        //Udp.printf(CLIENT_TOUCH_LOW_MSG);
       #else //ESP8266
         // ############### better resend the original message with message and ID for identifying response
-        Udp.write(CLIENT_TOUCH_LOW_MSG);
+        Udp.write(packetBuffer);
+        //Udp.write(CLIENT_TOUCH_LOW_MSG);
       #endif
       Udp.endPacket();
       return;
     }
 
-    //received client battery low
+    //received client BATTERY low
     if (!strncmp (packetBuffer, CLIENT_BAT_LOW_MSG, strlen(CLIENT_BAT_LOW_MSG))){
       clientBatteryStatus= CLIENT_BAT_LOW;
-      #ifdef DEBUG
-          Serial.printf("loop(): Client battery is low\n\n");
-      #endif
-      return;
-    }
-
-    //received client battery critical
-    if (!strncmp (packetBuffer, CLIENT_BAT_CRITICAL_MSG, strlen(CLIENT_BAT_CRITICAL_MSG))){
-      clientBatteryStatus = CLIENT_BAT_CRITICAL;
-      #ifdef DEBUG
-          Serial.printf("loop(): Client battery is critical\n\n");
-      #endif
-      return;
-    }
-
-    //received client battery is ok
-    if (!strncmp (packetBuffer, CLIENT_BAT_OK_MSG, strlen(CLIENT_BAT_OK_MSG))){
-      clientBatteryStatus= CLIENT_BAT_OK;
-      char *temp = packetBuffer + strlen(CLIENT_BAT_OK_MSG);        // cut/decode the raw voltage number out of the client message
+      char *temp = strtok (packetBuffer,"_");                       // identifier CLIENT_BAT_LOW_MSG
+      temp = strtok (NULL, "_");                                    // battery voltage
       clientBateryVoltage = strtof(temp, &errCheck);                // convert string to float
       #ifdef DEBUG
-          Serial.printf("loop(): Received Client battery is ok message, current bat voltage is %.2fV\n", clientBateryVoltage);
+        Serial.printf("loop(): Received Client battery is low (%.2fV)\n\n", clientBateryVoltage);
       #endif
       return;
     }
 
-    //received client is alive
+    //received client BATTERY critical
+    if (!strncmp (packetBuffer, CLIENT_BAT_CRITICAL_MSG, strlen(CLIENT_BAT_CRITICAL_MSG))){
+      clientBatteryStatus = CLIENT_BAT_CRITICAL;
+      char *temp = strtok (packetBuffer,"_");                       // identifier CLIENT_BAT_CRITICAL_MSG
+      temp = strtok (NULL, "_");                                    // battery voltage
+      clientBateryVoltage = strtof(temp, &errCheck);                // convert string to float
+      #ifdef DEBUG
+        Serial.printf("loop(): Received Client battery is critical (%.2fV)\n\n", clientBateryVoltage);
+      #endif
+      return;
+    }
+
+  
+    //received client BATTERY is ok
+    if (!strncmp (packetBuffer, CLIENT_BAT_OK_MSG, strlen(CLIENT_BAT_OK_MSG))){
+      clientBatteryStatus= CLIENT_BAT_OK;
+      char *temp = strtok (packetBuffer,"_");                       // identifier CLIENT_BAT_OK_MSG
+      temp = strtok (NULL, "_");                                    // battery voltage
+      clientBateryVoltage = strtof(temp, &errCheck);                // convert string to float
+      #ifdef DEBUG
+        Serial.printf("loop(): Received Client battery is ok message (%.2fV)\n", clientBateryVoltage);
+      #endif
+      return;
+    }
+
+    //received client is ALIVE
     if (!strncmp (packetBuffer, CLIENT_ALIVE_MSG, strlen(CLIENT_ALIVE_MSG))){
       client_alive_counter = 0;    //reset client alive counter when receiving alive message
       #ifdef DEBUG
-          Serial.printf("loop(): Received -Client is alive- message\n");
+        Serial.printf("loop(): Received -Client is alive- message\n");
       #endif
       return;
     }
 
-    //received client hello message
+    //received client HELLO message
     if (!strncmp (packetBuffer, CLIENT_HELLO_MSG, strlen(CLIENT_HELLO_MSG))){
       #ifdef DEBUG
-          Serial.printf("loop(): Detected client hello command, send a hello reply\n\n");
+        Serial.printf("loop(): Detected client hello command, send a hello reply\n\n");
       #endif
       Udp.beginPacket(clientIpAddr, clientUdpPort);
       #ifdef SERVER_ESP32
@@ -677,7 +715,7 @@ void loop(){
       return;
     }
 
-    //received client reply message
+    //received client REPLY message
     if (!strncmp (packetBuffer, CLIENT_REPLY_MSG, strlen(CLIENT_REPLY_MSG))){
       #ifdef DEBUG
         Serial.printf("loop(): Detected client reply message\n");
@@ -685,22 +723,26 @@ void loop(){
       return;
     }
           
-    //received client measures loop cycle message
-    if (!strncmp (packetBuffer, CLIENT_CYCLE_MSG, strlen(CLIENT_CYCLE_MSG))){    // trying to decod the CLIENT_CYCLE_MSG prefix from the msg
-      char *temp = packetBuffer + strlen(CLIENT_CYCLE_MSG);                    // cut/decode the raw number of ticks out of the client message
+    //received client measures LOOP CYCLE message
+    if (!strncmp (packetBuffer, CLIENT_CYCLE_MSG, strlen(CLIENT_CYCLE_MSG))){     // trying to decod the CLIENT_CYCLE_MSG prefix from the msg
+      char *temp = strtok (packetBuffer,"_");                                     // identifier CLIENT_CYCLE_MSG
+      temp = strtok (NULL, "_");                                                  // decode cycle time 
+      //char *temp = packetBuffer + strlen(CLIENT_CYCLE_MSG);                     // cut/decode the raw number of ticks out of the client message
       #ifdef CYCLETIME
-        ticks = atoi(temp);                                                      // convert string of ticks to integer of ticks
-        setNewTicks(ticks);                                                      // safe the current ticks value in an array
-      #endif
-      #ifdef DEBUG
-          Serial.printf("loop(): Received Cycle measurement message from client: %d ticks\n", ticks);
+          ticks = atoi(temp);                                                      // convert string of ticks to integer of ticks
+          setNewTicks(ticks);                                                      // safe the current ticks value in an array
+        #ifdef DEBUG
+            Serial.printf("loop(): Received Cycle measurement message from client: %d ticks\n", ticks);
+        #endif
       #endif
       return;
     }
 
-    //received rssi 
-    if (!strncmp (packetBuffer, CLIENT_RSSI_MSG, strlen(CLIENT_RSSI_MSG))){      // trying to decod the CLIENT_RSSI_MSG prefix from the msg
-      char *temp = packetBuffer + strlen(CLIENT_RSSI_MSG);                    // cut/decode the raw number of ticks out of the client message
+    //received RSSI 
+    if (!strncmp (packetBuffer, CLIENT_RSSI_MSG, strlen(CLIENT_RSSI_MSG))){     // trying to decod the CLIENT_RSSI_MSG prefix from the msg
+      //char *temp = packetBuffer + strlen(CLIENT_RSSI_MSG);                    // cut/decode the raw number of ticks out of the client message
+      char *temp = strtok (packetBuffer,"_");                                   // cut  CLIENT_RSSI_MSG
+      temp = strtok (NULL, "_");                                                // decode RSSI value 
       rssi = atoi(temp);
       #ifdef DEBUG
           Serial.printf("loop(): Received RSSI message from client: %d\n", rssi);
@@ -708,12 +750,16 @@ void loop(){
       return;
     }
 
-    //received client info message, several information about the client paramters and version
+    //received CLIENT INFO message, several information about the client paramters and version
     if (!strncmp (packetBuffer, CLIENT_INFO_MSG, strlen(CLIENT_INFO_MSG))){    // decode the CLIENT_INFO_MSG prefix from the msg
-      char *temp = packetBuffer + strlen(CLIENT_INFO_MSG);                    // cut/decode the raw infos out of the client message
-      strcpy(clientInfo, temp);
-      #ifdef DEBUG
-          Serial.printf("loop(): Received client info message: %s \n", clientInfo);
+      char *temp             = strtok (packetBuffer,"_");                      // identifier CLIENT_INFO_MSG
+      clientStates.micro     = strtok (NULL, "_");                             // decode Microprocessor Type
+      clientStates.debug     = strtok (NULL, "_");                             // decode DEBUG 
+      clientStates.cycle     = strtok (NULL, "_");                             // decode CYCLETIME 
+      clientStates.swVersion = strtok (NULL, "_");                             // decode Software Version 
+      clientStates.hwVersion = strtok (NULL, "_");                             // decode Hardware Version 
+     #ifdef DEBUG
+          Serial.printf("loop(): Received client info message: %s, %s, %s, %s and %s\n", clientStates.micro, clientStates.debug, clientStates.cycle, clientStates.swVersion, clientStates.hwVersion);
       #endif
       return;
     }

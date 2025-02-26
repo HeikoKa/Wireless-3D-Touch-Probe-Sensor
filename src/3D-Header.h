@@ -1,7 +1,7 @@
 /**  Header
   *   
   *  @author Heiko Kalte  
-  *  @date 22.02.2025 
+  *  @date 26.02.2025 
   * 
   *  @version 0.2
   */
@@ -16,19 +16,20 @@
 
 //## user defines start ##
 //general defines
-#define DEBUG                   // enable debug output via serial interface on client and server
-//#define DEBUG_SHOW_CORE         // Additional debug info on which cpu core the current function is running
-//#define CYCLETIME             // enable measuring the round trip delay from client to server back to client
+//#define DEBUG                   // enable debug output via serial interface on client and server
+//#define DEBUG_SHOW_CORE        // Additional debug info on which cpu core the current function is running
+//#define DEBUG_SHOW_ALL_TRANSMISSIONS  // show all wifi transmissions during DEBUG
+//#define CYCLETIME              // enable measuring the round trip delay from client to server back to client
 
 // server/basestation specific defines
 #define SERVER_ESP32            // defines server as a ESP32 instead of a ESP8266, comment out to switch to ESP8266
-#define WEBSERVER               // enable webserver
+//#define WEBSERVER               // enable webserver
 //#define SERVER_HW_REVISION_3_0  // set this define if basestation/server is hardware revision 3.0 or later
 
 // client specific defines
 #define CLIENT_ESP32         // defines client as a ESP32 (e.g. Waveshare ESP32-S3-Zero)instead of a ESP8266, comment out to switch to ESP8266
 //#define CLIENT_HW_REVISION_2_0  // set this define if client is hardware PCB revision 2.0 or later
-#define SHOW_STATE_COLORS       // if enabled at the startup of the client all state colors are shown one after the other
+//#define SHOW_STATE_COLORS       // if enabled at the startup of the client all state colors are shown one after the other
 //## user defines end ##
 
 #include "IPAddress.h"
@@ -51,7 +52,7 @@ namespace CncSensor{
   //general consts
   const int          BAUD_RATE                   = 9600;                  // Baud rate for serial outputs/debug
   const char*        SSID                        = "3D-Touch-WIFI";       // WLAN network name to search for when connecting to the webserver
-  const char*        password                    = "123456789";            // WLAN password
+  const char*        password                    = "123456789";           // WLAN password
 
   //server consts
   const char*        SERVER_SLEEP_MSG            = "sleep";               // UDP message from server to client to send client asleep
@@ -83,14 +84,14 @@ namespace CncSensor{
   const char*        CLIENT_INFO_MSG         = "INFO:";                   // UDP message from client to server with infos about the client
   const int          SERVER_ALIVE_CNT_MAX    = 1;                         // maximum server alive counter value, try to reconnect
   const int          SERVER_ALIVE_CNT_DEAD   = 2;                         // maximum server alive counter value, server seems to be dead
-  const int          SERVER_AQUN_CNT_MAX     = 2000;                      // number of loop cycles before the server must acknowledge the high/low messages
-  const int          TOUCH_PIN_DEBOUNCE      = 700;                       // debounce time in µs for touch input pin
+  const int          SERVER_AQUN_CNT_MAX     = 4000;                      // number of loop cycles before the server must acknowledge the high/low messages
+  const int          TOUCH_PIN_DEBOUNCE      = 700;                       // debounce time in µs for software touch input pin
   const bool         NO_SLEEP_WHILE_CHARGING = true;                      // prevent sleeping during battery loading, e.g. to keep status LED on
   const uint8_t      CLIENT_RGB_BRIGHTNESS   = 20;                        // brightness of the RGB LED (max 255). Product of CLIENT_RGB_BRIGHTNESS x RGB_FADE_SPEED = Fading Time at start and end
   const uint8_t      CLIENT_RGB_FADE_SPEED   = 100;                       // speed for fading out the LED brightness when going to sleep. Set as delay, smaller value faster fading
   const bool         CLIENT_ALLOW_LED_FADING = true;                      // allow fading LED at startup and sleep. Leads to longer startup time, but looks nice.
   const bool         CLIENT_TOUCH_POLARITY   = true;                      // invert sensor touch input 
-  
+  const uint8_t      TRANSMISSION_RETRY_MAX  = 3;                         // maximum wifi transmission retrys before an transmission error is reported
   //client and server consts
   const uint32_t     SERVICE_INTERVALL       = 4615385;     //~15sec      // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
   const uint32_t     SERVICE_INTERVALL_ESP32 = 15000000;                  // ESP32 Time in 1MHz ticks between service interrupt calls (20000000 = 20sec)
