@@ -1,7 +1,7 @@
 /**  Header
   *   
   *  @author Heiko Kalte  
-  *  @date 26.02.2025 
+  *  @date 12.03.2025 
   * 
   *  @version 0.2
   */
@@ -36,7 +36,7 @@
 
 namespace CncSensor{
 
-  //RGB Colors                                // red                   , green       , blue
+  //RGB Colors                                //red                    , green                  , blue
   #define           POWER_COLOR                 CLIENT_RGB_BRIGHTNESS  , CLIENT_RGB_BRIGHTNESS  , CLIENT_RGB_BRIGHTNESS    //white  (255, 255, 255)
   #define           CHARGE_COLOR                0                      , CLIENT_RGB_BRIGHTNESS  , 0                        //green  (0  , 255,   0)
   #define           TOUCH_COLOR                 0                      , 0                      , CLIENT_RGB_BRIGHTNESS    //blue   (0  ,   0, 255)
@@ -82,8 +82,8 @@ namespace CncSensor{
   const char*        CLIENT_RSSI_MSG         = "rssi";                    // UDP message from client with rssi (WLAN signal strength)
   const char*        CLIENT_CYCLE_MSG        = "CYC:";                    // UDP message from client to server to transmit the last measured cycle time ticks
   const char*        CLIENT_INFO_MSG         = "INFO:";                   // UDP message from client to server with infos about the client
-  const int          SERVER_ALIVE_CNT_MAX    = 1;                         // maximum server alive counter value, try to reconnect
-  const int          SERVER_ALIVE_CNT_DEAD   = 2;                         // maximum server alive counter value, server seems to be dead
+  const int          SERVER_ALIVE_CNT_MAX    = 2;                         // maximum server alive counter value, try to reconnect
+  const int          SERVER_ALIVE_CNT_DEAD   = 3;                         // maximum server alive counter value, server seems to be dead
   const int          SERVER_AQUN_CNT_MAX     = 4000;                      // number of loop cycles before the server must acknowledge the high/low messages
   const int          TOUCH_PIN_DEBOUNCE      = 700;                       // debounce time in µs for software touch input pin
   const bool         NO_SLEEP_WHILE_CHARGING = true;                      // prevent sleeping during battery loading, e.g. to keep status LED on
