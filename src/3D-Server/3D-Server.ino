@@ -1,7 +1,7 @@
  /*  3D Sensor Server/Basestation
   *   
   *  @author Heiko Kalte  
-  *  @date 11.03.2025 
+  *  @date 15.03.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
 
@@ -12,7 +12,7 @@
 
 // Use Arduino IDE with board package ESP32-WROOM-DA
 
-char *serverSwVersion = "V03.00";
+char *serverSwVersion = "3.00";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
 
 #include <stdio.h>
@@ -234,10 +234,7 @@ clientStateType clientStates;
 
 
 static inline void sendWifiMessage(String msg){  
-   transmitCounter++;                                            // increment identifier each time sendWifiMessage() is called
-  #ifdef CYCLETIME
-    bTimeHigh = asm_ccount();                                   // take begin time for client to server to client cycle time measurement
-  #endif
+  transmitCounter++;                                            // increment identifier each time sendWifiMessage() is called
   Udp.beginPacket(clientIpAddr, clientUdpPort);            // send UDP packet to server to indicate the 3D touch change 
   #ifdef CLIENT_ESP32
     Udp.printf(msg.c_str());
@@ -374,10 +371,11 @@ void wlanInit(){
       digitalWrite(SERVER_WLAN_LED, HIGH);                             // Switch off WLAN connection LED
       delay(SLOW_BLINK);                                               // Blink WLAN LED, but keep WLAN ouput to cnc controller false
       digitalWrite(SERVER_WLAN_LED, LOW);                              // Switch on WLAN connection LED
+      delay(SLOW_BLINK);                                               // Blink WLAN LED, but keep WLAN ouput to cnc controller false
     #else
       //do not blink LED if LED ouput is also used as ouput for the cnc controller (PCB revision <3.0) to avoid false detection by CNC Controller
       digitalWrite(SERVER_WLAN_LED, HIGH);                             // switch off WLAN connection LED
-      delay(SLOW_BLINK);
+      delay(SLOW_BLINK);                                                // even if output is not blinking, wait a short time to prevent 
     #endif
     yield();
     if (serviceRequest == true)        //do service routine if isr has set the service flag
@@ -391,7 +389,6 @@ void wlanInit(){
 
   // A client is connected at this point, now check by UDP messages, if it is the right client
   Udp.begin(serverUdpPort);                               //setup UDP receiver
-
   while(!wlan_complete){
     //send hello message to the connected client
     #ifdef DEBUG
@@ -400,9 +397,7 @@ void wlanInit(){
       Serial.printf(" and Port: ");
       Serial.printf("%d\n", clientUdpPort);
     #endif
-    
     sendWifiMessage(SERVER_HELLO_MSG);
-    
     // listen for UDP respond from client
     int packetSize = Udp.parsePacket();
     if (packetSize){
@@ -440,6 +435,7 @@ void wlanInit(){
         digitalWrite(SERVER_WLAN_LED, HIGH);                             // switch off WLAN LED 
         delay(FAST_BLINK);                                               // make a small pause
         digitalWrite(SERVER_WLAN_LED, LOW);                              // switch on WLAN LED 
+        delay(FAST_BLINK);                                               // make a small pause
       #else // PCB revision <3.0
         digitalWrite(SERVER_WLAN_LED, HIGH);                             // still switch off WLAN connection LED for PCB <3.0 to avoid false detection by CNC controller
         delay(FAST_BLINK);                                               // make a small pause
@@ -480,6 +476,10 @@ void setup(){
     pinMode(SERVER_HW_REVISION_1, INPUT);                        // server/basestation hardware PCB revisio bit 1 (only for PCB revision 3.0 or later)
     pinMode(SERVER_HW_REVISION_2, INPUT);                        // server/basestation hardware PCB revisio bit 2 (only for PCB revision 3.0 or later)
     serverHwPcbRevision = (digitalRead(SERVER_HW_REVISION_2) << 2) + (digitalRead(SERVER_HW_REVISION_1)<< 1) + digitalRead(SERVER_HW_REVISION_0); //construct version number from 3 input bit
+    #ifdef DEBUG
+      Serial.printf("setup(): My hardware/PCB version is: %d", serverHwPcbRevision);
+      Serial.println();
+    #endif
   #endif
 
   #ifdef SERVER_HW_REVISION_3_0
@@ -722,7 +722,7 @@ void loop(){
       clientStates.swVersion = strtok (NULL, "_");                             // decode Software Version 
       clientStates.hwVersion = strtok (NULL, "_");                             // decode Hardware Version 
      #ifdef DEBUG
-          Serial.printf("loop(): Received client info message: %s, %s, %s, %s and %s\n", clientStates.micro, clientStates.debug, clientStates.cycle, clientStates.swVersion, clientStates.hwVersion);
+          Serial.printf("loop(): Received client info message: CPU: %s, Debug: %s, Cycle: %s, SW rev: %s and HW rev: %s\n", clientStates.micro, clientStates.debug, clientStates.cycle, clientStates.swVersion, clientStates.hwVersion);
       #endif
       return;
     }

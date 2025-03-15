@@ -1,7 +1,7 @@
 /**  3D Sensor Client
   *   
   *  @author Heiko Kalte  
-  *  @date 11.03.2025 
+  *  @date 15.03.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
   
@@ -10,7 +10,7 @@
   
   // Using Arduino ESP32 PICO-D4 (but it is a ESP32 PICO V3-02 device)
 
-char *clientSwVersion = "V02.00";
+char *clientSwVersion = "2.00";
 #include <WiFiUdp.h>
 #include <Ticker.h>
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
@@ -518,6 +518,10 @@ static inline void initIo(void) {
     pinMode(CLIENT_HW_REVISION_1, INPUT);                         // client hardware PCB revision bit 1 (only for PCB revision 2.0 or later)
     pinMode(CLIENT_HW_REVISION_2, INPUT);                         // client hardware PCB revision bit 2 (only for PCB revision 2.0 or later)
     clientHwPcbRevision = (digitalRead(CLIENT_HW_REVISION_2) << 2) + (digitalRead(CLIENT_HW_REVISION_1)<< 1) + digitalRead(CLIENT_HW_REVISION_0); //construct version number from 3 input bit
+    #ifdef DEBUG
+      Serial.printf("setup() My hardware/PCB version is: %d", clientHwPcbRevision);
+      Serial.println();
+    #endif
   #endif
   digitalWrite(CLIENT_SLEEP_OUT,  HIGH);                          // switch on output to prevent external sleep hardware to send cpu and board to sleep
 }
@@ -582,6 +586,7 @@ void setup(void) {
     Serial.begin(BAUD_RATE);                                                    // Setup Serial Interface with baud rate
     Serial.println("setup() I am the 3D Touch Probe Sensor Client");
     Serial.println("setup() Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)");
+    Serial.printf("setup() My software version is: %s\n", clientSwVersion);
   #endif
   initIo();
   goAlive();

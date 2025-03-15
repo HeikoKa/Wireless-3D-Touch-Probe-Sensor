@@ -1,9 +1,9 @@
 /**  Header
   *   
   *  @author Heiko Kalte  
-  *  @date 12.03.2025 
+  *  @date 15.03.2025 
   * 
-  *  @version 0.2
+  *  @version 1.0
   */
 
 
@@ -23,12 +23,12 @@
 
 // server/basestation specific defines
 #define SERVER_ESP32            // defines server as a ESP32 instead of a ESP8266, comment out to switch to ESP8266
+#define SERVER_HW_REVISION_3_0  // set this define if basestation/server is hardware revision 3.0 or later
 //#define WEBSERVER               // enable webserver
-//#define SERVER_HW_REVISION_3_0  // set this define if basestation/server is hardware revision 3.0 or later
 
 // client specific defines
 #define CLIENT_ESP32         // defines client as a ESP32 (e.g. Waveshare ESP32-S3-Zero)instead of a ESP8266, comment out to switch to ESP8266
-//#define CLIENT_HW_REVISION_2_0  // set this define if client is hardware PCB revision 2.0 or later
+#define CLIENT_HW_REVISION_2_0  // set this define if client is hardware PCB revision 2.0 or later
 //#define SHOW_STATE_COLORS       // if enabled at the startup of the client all state colors are shown one after the other
 //## user defines end ##
 
