@@ -114,7 +114,7 @@ static inline bool sendWifiMessage(String msg, bool blocking){
         } //if(Udp.parsePacket())
       } //end while
       #ifdef DEBUG
-        Serial.printf("sendWifiMessage() No acknowledge message from server %d retry of maximum %d retrys, ", retry, TRANSMISSION_RETRY_MAX);
+        Serial.printf("sendWifiMessage() No acknowledge message from server %d retry of maximum %d retrys\n", retry, TRANSMISSION_RETRY_MAX);
       #endif
     }  //end for 
     return false;  // number of retry have not been successfull
@@ -135,8 +135,12 @@ static inline bool sendWifiMessage(String msg, bool blocking){
     Serial.println("doSensorHigh() Sending HIGH message");
   #endif
   high_msg = String(CLIENT_TOUCH_HIGH_MSG) + "_" + String(states.transmissionError); 	// put the current transmission error state into the UDP message
-  if (!sendWifiMessage(high_msg, true))							// call blocking upd message
+  if (!sendWifiMessage(high_msg, true)){						// call blocking upd message
     states.transmissionError = true;
+    #ifdef DEBUG
+      Serial.println("doSensorHigh() Transmission Error while sending High message");
+    #endif
+  }
 } // end void doSensorHigh(void)
 
 
@@ -152,8 +156,12 @@ static inline void doSensorLow(void){
     Serial.println("doSensorLow() Sending LOW message");
   #endif
   low_msg = String(CLIENT_TOUCH_LOW_MSG) + "_" + String(states.transmissionError); // put the current touch error state into the UDP message
-  if (!sendWifiMessage(low_msg, true))							// call blocking upd message
+  if (!sendWifiMessage(low_msg, true)){							// call blocking upd message
 		states.transmissionError = true;
+    #ifdef DEBUG
+      Serial.println("doSensorLow() Transmission Error while sending LOW message");
+    #endif
+  }
 } //end void doSensorLow(void)
 
 
@@ -617,9 +625,7 @@ void loop(void){
   // for more responsiveness check for battery charging status changes within loop()
   if (states.chargingBat != (digitalRead(CLIENT_CHARGE_IN) == LOW)){
     #ifdef DEBUG
-      Serial.printf("loop() charging state changed, calling checkBatteryVoltage()\n");
-      Serial.println(states.chargingBat);
-      Serial.println(digitalRead(CLIENT_CHARGE_IN)==LOW);
+      Serial.printf("loop() charging state changed from %d to %d, calling checkBatteryVoltage()\n", states.chargingBat, digitalRead(CLIENT_CHARGE_IN)==LOW);
     #endif
     checkBatteryVoltage();
     controlLed(NONE); // set LED immediately
