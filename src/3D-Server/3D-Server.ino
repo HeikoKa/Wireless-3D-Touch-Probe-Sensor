@@ -10,8 +10,10 @@
 // * store and display multiple battery voltage values for the webserver display (non volatile memory)
 // * are there any mem leaks?
 
+// ***************************************************
 // Use Arduino IDE with board package ESP32-WROOM-DA
-
+// ***************************************************
+  
 char *serverSwVersion = "3.00";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
 

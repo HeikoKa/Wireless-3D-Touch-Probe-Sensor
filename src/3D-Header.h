@@ -16,7 +16,7 @@
 
 //## user defines start ##
 //general defines
-//#define DEBUG                   // enable debug output via serial interface on client and server
+#define DEBUG                   // enable debug output via serial interface on client and server
 //#define DEBUG_SHOW_CORE        // Additional debug info on which cpu core the current function is running
 //#define DEBUG_SHOW_ALL_TRANSMISSIONS  // show all wifi transmissions during DEBUG
 //#define CYCLETIME              // enable measuring the round trip delay from client to server back to client

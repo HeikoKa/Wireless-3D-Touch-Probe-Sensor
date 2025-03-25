@@ -8,8 +8,10 @@
   // TODO/Suggestions
   // battery loading could be send to the server to be displayed in the webserver
   
-  // Using Arduino ESP32 PICO-D4 (but it is a ESP32 PICO V3-02 device)
-
+  // *****************************************************************
+  // Use Arduino ESP32 PICO-D4 (but it is a ESP32 PICO V3-02 device)
+  // *****************************************************************
+  
 char *clientSwVersion = "2.00";
 #include <WiFiUdp.h>
 #include <Ticker.h>
