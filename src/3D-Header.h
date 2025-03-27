@@ -47,7 +47,8 @@ namespace CncSensor{
   #define           ALIVE_ERRROR_COLOR          CLIENT_RGB_BRIGHTNESS  , CLIENT_RGB_BRIGHTNESS/2, 0                        //orange (255, 127,   0)
 
   //datatypes
-  enum fadingType {NONE, UP, DOWN};
+  enum fadingType  {NONE, UP, DOWN};
+  enum batCharType {NORMAL=0, MEAN=1, CRIT=2};   // battery voltage levels (LOW is already used, taking MEAN instead)
   
   //general consts
   const int          BAUD_RATE                   = 9600;                  // Baud rate for serial outputs/debug
