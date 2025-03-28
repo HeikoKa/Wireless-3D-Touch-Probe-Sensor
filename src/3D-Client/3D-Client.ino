@@ -1,7 +1,7 @@
 /**  3D Sensor Client
   *   
   *  @author Heiko Kalte  
-  *  @date 276.03.2025 
+  *  @date 28.03.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
   
@@ -51,8 +51,8 @@ struct statesType{
     bool    aliveCounterError        = false;                 // error with server alive counter
 }; 
 
-batCharType batLowStatus[] = {NORMAL, NORMAL, NORMAL};
-long rssiErrorStatus[] = {0, 0, 0};
+float batVoltArray[] = {4.0, 4.0, 4.0};
+long rssiArray[]     = {  0,   0,   0};
 
 statesType states; 
 
@@ -74,68 +74,40 @@ statesType states;
 
 Adafruit_NeoPixel pixels(1, CLIENT_RGB_LED_OUT, NEO_GRB + NEO_KHZ800);
 
-static inline void checkRssiError(long rssiInput){
-  rssiErrorStatus[arrayIndexRssi] = rssiInput;     //write given rssi into array
+
+static inline void checkRssi(void){
+  // check WLAN signal stength (average of the last 3 values)
+  rssiArray[arrayIndexRssi] = WiFi.RSSI();     //write rssi into array
   arrayIndexRssi++;
   if (arrayIndexRssi > 2)
     arrayIndexRssi = 0;
   #ifdef DEBUG
-    Serial.printf("checkRssiError() Last three RSSI values were: %d, %d and %d\n", rssiErrorStatus[0], rssiErrorStatus[1], rssiErrorStatus[2]);
+    Serial.printf("checkRssi() Last three RSSI values were: %d, %d and %d\n", rssiArray[0], rssiArray[1], rssiArray[2]);
   #endif
 
   int sum = 0;
   for(int i=0; i<3; i++){
-    sum = sum + rssiErrorStatus[i];
+    sum = sum + rssiArray[i];
   } //end for
 
   long rssi = sum/3; // average of the last three
 
   if (rssi < WIFI_RSSI_REPORT_LEVEL){
     #ifdef DEBUG
-      Serial.print("checkRssiError() Warning: WLAN signal strength is low, average 3 measures RSSI:");
+      Serial.print("checkRssi() Warning: WLAN signal strength is low, average 3 measures RSSI:");
       Serial.println(rssi);
     #endif
     states.rssiError = true;
   }else{
     #ifdef DEBUG
-      Serial.print("checkRssiError() WLAN signal strength is ok, average 3 measures RSSI:");
+      Serial.print("checkRssi() WLAN signal strength is ok, average 3 measures RSSI:");
       Serial.println(rssi);
     #endif
     states.rssiError = false;
   } // end if
   String cycle_msg = String(CLIENT_RSSI_MSG) + "_" + String(rssi);   // pack message and rssi in the UDP frame
   sendWifiMessage(cycle_msg, false);
-} //checkRssiError()
-
-
-static inline batCharType checkBatLow(float Voltage){
-  if (Voltage < BAT_LOW_VOLT){
-    if (Voltage < BAT_CRIT_VOLT)
-      batLowStatus[arrayIndexBat] = CRIT;     //write given status into array
-    else                                      // check if battery voltage is critical
-      batLowStatus[arrayIndexBat] = MEAN;     //write given status into array
-  }else{
-    batLowStatus[arrayIndexBat] = NORMAL;     //write given status into array
-  }
-  arrayIndexBat++;
-  if (arrayIndexBat > 2)
-    arrayIndexBat = 0;
-  #ifdef DEBUG
-    Serial.printf("checkBatLow() Last three battery status were: %d, %d and %d\n", batLowStatus[0], batLowStatus[1], batLowStatus[2]);
-  #endif
-  int sum = 0;
-  for(int i=0; i<3; i++){
-    sum = sum + batLowStatus[i];
-  } //end for
-  if (sum < 3){
-    return NORMAL;
-  }else{
-    if(sum < 6)
-      return MEAN;
-    else
-      return CRIT;  
-  } //if (sum < 3)
-} //end checkBatLow()
+} //checkRssi()
 
 
 static inline bool sendWifiMessage(String msg, bool blocking){  
@@ -215,6 +187,7 @@ static inline bool sendWifiMessage(String msg, bool blocking){
 
 
 static inline void doSensorLow(void){
+  // handle a low signal from the sensor input
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("doSensorLow() running on core ");
     Serial.println(xPortGetCoreID());
@@ -236,6 +209,7 @@ static inline void doSensorLow(void){
 
 
 static inline void checkAliveCounter(void){
+  // check server alive counter
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("checkAliveCounter() running on core ");
     Serial.println(xPortGetCoreID());
@@ -270,6 +244,7 @@ static inline void checkAliveCounter(void){
 
 
 static inline void checkBatteryVoltage(void){
+  // check the battery voltage
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("checkBatteryVoltage() running on core ");
     Serial.println(xPortGetCoreID());
@@ -292,40 +267,49 @@ static inline void checkBatteryVoltage(void){
     int analogVolts = ESP.getVcc();
     float batVoltage = analogVolts / 1000.0 + BAT_CORRECTION;
   #endif
-  batCharType result = checkBatLow(batVoltage); // save current measurment in array and get result of the array entries
-  switch (result)
-  {
-    case NORMAL:
-      cycle_msg = String(CLIENT_BAT_OK_MSG) + "_" + String(batVoltage);   // pack message and bat voltage in the UDP frame
-      #ifdef DEBUG
-      Serial.printf("checkBatteryVoltage() Bat Voltage is ok, measured value is %.2fV (low bat is %.2fV and critical bat is %.2fV)\n", batVoltage, BAT_LOW_VOLT, BAT_CRIT_VOLT);
-      #endif
-      states.batteryError = false;  
-      break;
-
-    case MEAN:
-      cycle_msg = String(CLIENT_BAT_LOW_MSG) + "_" + String(batVoltage);          // pack message and bat voltage in the UDP frame
-      #ifdef DEBUG
-        Serial.printf("checkBatteryVoltage() Voltage is low, current value is ");
-        Serial.println(batVoltage);
-      #endif
-      states.batteryError = true;                           // indicate low or critical battery by LED
-      break;
-
-    case CRIT:
-      cycle_msg = String(CLIENT_BAT_CRITICAL_MSG) + "_" + String(batVoltage);     // pack message and bat voltage in the UDP frame
+  batVoltArray[arrayIndexBat] = batVoltage;  // store the last 3 voltage values in an array to build an average
+  arrayIndexBat++;
+  if (arrayIndexBat > 2)
+    arrayIndexBat = 0;
+  int sum = 0;
+  for(int i=0; i<3; i++)
+    sum = sum + batVoltArray[i];
+  float average = sum/3;
+  #ifdef DEBUG
+    Serial.printf("checkBatteryVoltage() Last three battery voltage values were: %.1f, %.1f and %.1f. Average is: %.1f\n", batVoltArray[0], batVoltArray[1], batVoltArray[2]), average;
+  #endif
+  if (average < BAT_LOW_VOLT){ 
+    if (average < BAT_CRIT_VOLT){
+      // CRITICAL battery voltage
+      cycle_msg = String(CLIENT_BAT_CRITICAL_MSG) + "_" + String(average);     // pack message and bat voltage in the UDP frame
       #ifdef DEBUG
         Serial.printf("checkBatteryVoltage() Voltage is critical, current value is ");
-        Serial.println(batVoltage);
+        Serial.println(average);
       #endif
-      states.batteryError = true;                           // indicate low or critical battery by LED
-      break;
-  } // end switch
+      states.batteryError = true;                                               // indicate low or critical battery by LED
+    }else{                                                                      // check if battery voltage is critical
+      //LOW battery voltage
+      cycle_msg = String(CLIENT_BAT_LOW_MSG) + "_" + String(average);           // pack message and bat voltage in the UDP frame
+      #ifdef DEBUG
+        Serial.printf("checkBatteryVoltage() Voltage is low, current value is ");
+        Serial.println(average);
+      #endif
+      states.batteryError = true;                                               // indicate low or critical battery by LED
+    } //end if (average < BAT_CRIT_VOLT)
+  }else{ // if (average < BAT_LOW_VOLT)
+    //NORMAL battery voltage
+    cycle_msg = String(CLIENT_BAT_OK_MSG) + "_" + String(average);              // pack message and bat voltage in the UDP frame
+    #ifdef DEBUG
+      Serial.printf("checkBatteryVoltage() Bat Voltage is ok, average measured value is %.2fV (low bat is %.2fV and critical bat is %.2fV)\n", average, BAT_LOW_VOLT, BAT_CRIT_VOLT);
+    #endif
+    states.batteryError = false;
+  } // end if(average < BAT_LOW_VOLT)
   sendWifiMessage(cycle_msg.c_str(), false);
 } // end checkBatteryVoltage(void)
 
 
 String collectClientData(void){
+  // collect client data to transmit to server for display in webserver
   String msg = CLIENT_INFO_MSG + String("_");
   #ifdef CLIENT_ESP32
    msg += String("ESP32_");
@@ -350,6 +334,7 @@ String collectClientData(void){
 
 
 static inline void checkWlanStatus(void) {
+  // check WLAN status
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("checkWlanStatus() running on core ");
     Serial.println(xPortGetCoreID());
@@ -360,12 +345,12 @@ static inline void checkWlanStatus(void) {
     #endif
     states.wlanComplete = false;
   } //if (states.wlanComplete == true)
-  //rssi = WiFi.RSSI();
-  checkRssiError(WiFi.RSSI());
+  checkRssi();                       // check WLAN signal strength
 } //end void checkWlanStatus()
 
 
-static inline void sendAliveMsg(void) {
+static inline void sendAliveMsg(void){
+  // send regular alive messages to server
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("sendAliveMsg() running on core ");
     Serial.println(xPortGetCoreID());
@@ -378,7 +363,7 @@ static inline void sendAliveMsg(void) {
 
 
 static inline void doService(void){
-  // Does all service activities that are called regularly by timer interrupt
+  // Do all service activities that are called regularly by timer interrupt
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("doService() running on core ");
     Serial.println(xPortGetCoreID());
@@ -422,6 +407,7 @@ void ICACHE_RAM_ATTR serviceIsr(void){                    // timer interrupt ser
 
 
 void wlanInit(void){
+  // init wireless connection to server 
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("wlanInit() running on core ");
     Serial.println(xPortGetCoreID());
@@ -443,7 +429,7 @@ void wlanInit(void){
     if (serviceRequest == true){                          // do service routine if isr has set the service flag
       checkAliveCounter();                                // check Alive Counter to go to sleep after a while if no server is available
       serviceRequest = false;                             // reset service flag after small alive counter service
-    }
+    } // end if
   }//end while WiFi.status
 
   Udp.begin(clientUdpPort);                               // now listening for a server to send UDP messages
@@ -498,8 +484,7 @@ void wlanInit(void){
       doService();
   } //end while(!states.wlanComplete)
   
-  //Send collected infos about client to server, e.g. to be displayed in Webserver
-  String cycle_msg = collectClientData();
+  String cycle_msg = collectClientData();                         //Send collected infos about client to server, e.g. to be displayed in Webserver
   #ifdef DEBUG
     Serial.printf("wlanInit() Sending Wifi message with client infos: %s\n", cycle_msg.c_str());
   #endif
@@ -508,6 +493,7 @@ void wlanInit(void){
 
 
 void controlLed(fadingType fading){
+  // set the RGB LED color according to the current state
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("controlLed() running on core ");
     Serial.println(xPortGetCoreID());
@@ -574,7 +560,8 @@ void controlLed(fadingType fading){
 } //end controlLed
 
 
-static inline void initIo(void) {
+static inline void initIo(void){
+  // initialize the MCU IO
   #ifdef CLIENT_ESP32
     analogReadResolution(12);   //set the resolution to 12 bits (0-4095) for ESP32 only
   #endif
@@ -621,6 +608,7 @@ void showStateColors(void){
 }
 
 void goAlive(void){
+  // do everything that needs to be done when going alive
   #ifdef DEBUG
     Serial.println("goAlive() Going alive");
   #endif
@@ -632,7 +620,8 @@ void goAlive(void){
 }  //goAlive()
 
 
-void goSleep(){  
+void goSleep(){ 
+  // go to sleep to save battery 
   if (!((NO_SLEEP_WHILE_CHARGING) && (digitalRead(CLIENT_CHARGE_IN) == LOW))){   // prevent goint to sleep if battery is charging and the NO_SLEEP_WHILE_CHARGING flag is set
     #ifdef DEBUG
       Serial.println("goSleep() Going to sleep");
@@ -644,13 +633,14 @@ void goSleep(){
     digitalWrite(CLIENT_SLEEP_OUT, LOW);                                        // switch off external power
   }else{  // if(!((NO_SLEEP_WHILE_CHARGING)
   #ifdef DEBUG
-    Serial.println("goSleep() Not going to sleep while charging");
+    Serial.println("goSleep() Not going to sleep, because NO_SLEEP_WHILE_CHARGING is set");
   #endif
   } // if(!((NO_SLEEP_WHILE_CHARGING)
 } //end void goSleep()
 
 
-void setup(void) {
+void setup(void){
+  // general setup function
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                                    // Setup Serial Interface with baud rate
     Serial.println("setup() I am the 3D Touch Probe Sensor Client");
@@ -688,6 +678,12 @@ void loop(void){
     #ifdef DEBUG
       Serial.printf("loop() charging state changed from %d to %d, calling checkBatteryVoltage()\n", states.chargingBat, digitalRead(CLIENT_CHARGE_IN)==LOW);
     #endif
+    if (SLEEP_DURING_CHARGING && (digitalRead(CLIENT_CHARGE_IN)==LOW)){
+      #ifdef DEBUG
+        Serial.printf("loop() Charging started and SLEEP_DURING_CHARGING is enabled. Going to sleep\n");
+      #endif
+      goSleep();
+    }
     checkBatteryVoltage();
     controlLed(NONE); // set LED immediately
   }

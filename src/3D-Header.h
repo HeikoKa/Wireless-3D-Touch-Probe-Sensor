@@ -1,7 +1,7 @@
 /**  Header
   *   
   *  @author Heiko Kalte  
-  *  @date 15.03.2025 
+  *  @date 28.03.2025 
   * 
   *  @version 1.0
   */
@@ -48,7 +48,6 @@ namespace CncSensor{
 
   //datatypes
   enum fadingType  {NONE, UP, DOWN};
-  enum batCharType {NORMAL=0, MEAN=1, CRIT=2};   // battery voltage levels (LOW is already used, taking MEAN instead)
   
   //general consts
   const int          BAUD_RATE                   = 9600;                  // Baud rate for serial outputs/debug
@@ -87,7 +86,8 @@ namespace CncSensor{
   const int          SERVER_ALIVE_CNT_DEAD   = 3;                         // maximum server alive counter value, server seems to be dead
   const int          SERVER_AQUN_CNT_MAX     = 4000;                      // number of loop cycles before the server must acknowledge the high/low messages
   const int          TOUCH_PIN_DEBOUNCE      = 700;                       // debounce time in µs for software touch input pin
-  const bool         NO_SLEEP_WHILE_CHARGING = true;                      // prevent sleeping during battery loading, e.g. to keep status LED on
+  const bool         NO_SLEEP_WHILE_CHARGING = false;                     // prevent sleeping during battery loading, e.g. to keep status LED on to see is charging finished. SLEEP_DURING_CHARGING mut not be true at the same time
+  const bool         SLEEP_DURING_CHARGING   = false;                     // fall asleep when charging helpfull e.g. in case of a charger in the toolchanger magazine. NO_SLEEP_WHILE_CHARGING must not to true at the same time
   const uint8_t      CLIENT_RGB_BRIGHTNESS   = 20;                        // brightness of the RGB LED (max 255). Product of CLIENT_RGB_BRIGHTNESS x RGB_FADE_SPEED = Fading Time at start and end
   const uint8_t      CLIENT_RGB_FADE_SPEED   = 100;                       // speed for fading out the LED brightness when going to sleep. Set as delay, smaller value faster fading
   const bool         CLIENT_ALLOW_LED_FADING = true;                      // allow fading LED at startup and sleep. Leads to longer startup time, but looks nice.
