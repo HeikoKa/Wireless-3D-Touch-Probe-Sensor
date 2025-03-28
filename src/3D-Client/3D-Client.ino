@@ -94,7 +94,7 @@ static inline void checkRssi(void){
 
   if (rssi < WIFI_RSSI_REPORT_LEVEL){
     #ifdef DEBUG
-      Serial.print("checkRssi() Warning: WLAN signal strength is low, average 3 measures RSSI:");
+      Serial.print("checkRssi() Warning: WLAN signal strength is low, average RSSI:");
       Serial.println(rssi);
     #endif
     states.rssiError = true;
@@ -216,7 +216,7 @@ static inline void checkAliveCounter(void){
   #endif
   if (server_alive_cnt <= SERVER_ALIVE_CNT_MAX){
     #ifdef DEBUG
-      Serial.printf("\ncheckAliveCounter() Server alive counter current: %d, max reconnect: %d, max server dead: %d\n", server_alive_cnt, SERVER_ALIVE_CNT_MAX, SERVER_ALIVE_CNT_DEAD);
+      Serial.printf("checkAliveCounter() Server alive counter current: %d, max reconnect: %d, max server dead: %d\n", server_alive_cnt, SERVER_ALIVE_CNT_MAX, SERVER_ALIVE_CNT_DEAD);
     #endif
     server_alive_cnt++;                                          // increase "the server has not answered" alive counter
     states.aliveCounterError = false;                            // no error, no red LED
@@ -224,7 +224,7 @@ static inline void checkAliveCounter(void){
     if (server_alive_cnt <= SERVER_ALIVE_CNT_DEAD){
       // server alive messages are missing, but try to reconnect
       #ifdef DEBUG
-        Serial.printf("\ncheckAliveCounter() No server alive Wifi message during %d service intervals.\n", server_alive_cnt);
+        Serial.printf("checkAliveCounter() No server alive Wifi message during %d service intervals.\n", server_alive_cnt);
       #endif
       server_alive_cnt++;                                        // keep incrementing server alive counter during reconnect tries
       states.wlanComplete      = false;                          // server is (temporary?) dead the connection must be re-establisched
@@ -232,7 +232,7 @@ static inline void checkAliveCounter(void){
     }else{
       // server seems to be dead, client goes to sleep
       #ifdef DEBUG
-        Serial.printf("\ncheckAliveCounter() No server alive Wifi message during %d service intervals. Going to sleep\n", server_alive_cnt);
+        Serial.printf("checkAliveCounter() No server alive Wifi message during %d service intervals. Going to sleep\n", server_alive_cnt);
       #endif
       server_alive_cnt         = 0;
       states.wlanComplete      = false;
@@ -271,12 +271,12 @@ static inline void checkBatteryVoltage(void){
   arrayIndexBat++;
   if (arrayIndexBat > 2)
     arrayIndexBat = 0;
-  int sum = 0;
+  float sum = 0;
   for(int i=0; i<3; i++)
     sum = sum + batVoltArray[i];
   float average = sum/3;
   #ifdef DEBUG
-    Serial.printf("checkBatteryVoltage() Last three battery voltage values were: %.1f, %.1f and %.1f. Average is: %.1f\n", batVoltArray[0], batVoltArray[1], batVoltArray[2]), average;
+    Serial.printf("checkBatteryVoltage() Last three battery voltage values were: %.2f, %.2f and %.2f.\n", batVoltArray[0], batVoltArray[1], batVoltArray[2]);
   #endif
   if (average < BAT_LOW_VOLT){ 
     if (average < BAT_CRIT_VOLT){
