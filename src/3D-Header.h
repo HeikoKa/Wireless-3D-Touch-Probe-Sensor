@@ -82,17 +82,21 @@ namespace CncSensor{
   const char*        CLIENT_RSSI_MSG         = "rssi";                    // UDP message from client with rssi (WLAN signal strength)
   const char*        CLIENT_CYCLE_MSG        = "CYC:";                    // UDP message from client to server to transmit the last measured cycle time ticks
   const char*        CLIENT_INFO_MSG         = "INFO:";                   // UDP message from client to server with infos about the client
-  const int          SERVER_ALIVE_CNT_MAX    = 2;                         // maximum server alive counter value, try to reconnect
-  const int          SERVER_ALIVE_CNT_DEAD   = 3;                         // maximum server alive counter value, server seems to be dead
   const int          SERVER_AQUN_CNT_MAX     = 4000;                      // number of loop cycles before the server must acknowledge the high/low messages
   const int          TOUCH_PIN_DEBOUNCE      = 700;                       // debounce time in µs for software touch input pin
-  const bool         NO_SLEEP_WHILE_CHARGING = false;                     // prevent sleeping during battery loading, e.g. to keep status LED on to see is charging finished. SLEEP_DURING_CHARGING mut not be true at the same time
-  const bool         SLEEP_DURING_CHARGING   = false;                     // fall asleep when charging helpfull e.g. in case of a charger in the toolchanger magazine. NO_SLEEP_WHILE_CHARGING must not to true at the same time
   const uint8_t      CLIENT_RGB_BRIGHTNESS   = 20;                        // brightness of the RGB LED (max 255). Product of CLIENT_RGB_BRIGHTNESS x RGB_FADE_SPEED = Fading Time at start and end
   const uint8_t      CLIENT_RGB_FADE_SPEED   = 100;                       // speed for fading out the LED brightness when going to sleep. Set as delay, smaller value faster fading
   const bool         CLIENT_ALLOW_LED_FADING = true;                      // allow fading LED at startup and sleep. Leads to longer startup time, but looks nice.
   const bool         CLIENT_TOUCH_POLARITY   = true;                      // invert sensor touch input 
   const uint8_t      TRANSMISSION_RETRY_MAX  = 3;                         // maximum wifi transmission retrys before an transmission error is reported
+  //client sleep and awake consts
+  const bool         NO_SLEEP_WHILE_CHARGING = false;                     // prevent sleeping during battery loading, e.g. to keep status LED on to see is charging finished. SLEEP_DURING_CHARGING mut not be true at the same time
+  const bool         SLEEP_DURING_CHARGING   = false;                     // fall asleep when charging, helpfull e.g. in case of a charger in the toolchanger magazine. NO_SLEEP_WHILE_CHARGING must not be true at the same time
+  const bool         AUTO_SLEEP_TIMER_ENABLE = false;                     // enables/disables a timeout counter that sends the client asleep after a certain period of time of no touching (see also SLEEP_NO_TOUCH_CYCLES)
+  const int          AUTO_SLEEP_TIMER_CYCLES = 30;                        // timeout service cycles to send the client asleep after no touching event (timeout function must be enabled by SLEEP_NO_TOUCH_TIMEOUT, has also a relationship to parameter SERVICE_INTERVALL)
+  const int          SERVER_ALIVE_CNT_MAX    = 2;                         // maximum server alive counter value, try to reconnect
+  const int          SERVER_ALIVE_CNT_DEAD   = 3;                         // maximum server alive counter value, server seems to be dead and go to sleep
+  
   //client and server consts
   const uint32_t     SERVICE_INTERVALL       = 4615385;     //~15sec      // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
   const uint32_t     SERVICE_INTERVALL_ESP32 = 15000000;                  // ESP32 Time in 1MHz ticks between service interrupt calls (20000000 = 20sec)

@@ -37,6 +37,8 @@ int        server_alive_cnt         = 0;                      // current "server
 bool       serviceRequest           = false;                  // interrupt service can request a service intervall by this flag
 int        clientHwPcbRevision      = 0;                      // From client PCB version 2 onwards the version can be read out from the PCB coded by 3 hardware inputs
 uint32_t   transmitCounter          = 0;                      // counter for identify each sended Wifi message, is incremented with every UDP message
+uint32_t   autoSleepTimer           = AUTO_SLEEP_TIMER_CYCLES;  // init automatic sleep timer
+bool       touchAction              = false;                  // flag that indicates if any touch action (high/low) has taken place, relevant for the auto sleep timer
 uint8_t    arrayIndexBat            = 0;
 uint8_t    arrayIndexRssi           = 0;
 
@@ -170,6 +172,7 @@ static inline bool sendWifiMessage(String msg, bool blocking){
     Serial.print("doSensorHigh() running on core ");
     Serial.println(xPortGetCoreID());
   #endif
+  touchAction = true;                                   // indicates that any kind of action has taken place (for auto sleep timer)
   states.touchState = HIGH;                            // remember the current state
   controlLed(NONE);
   String high_msg;
@@ -192,14 +195,15 @@ static inline void doSensorLow(void){
     Serial.print("doSensorLow() running on core ");
     Serial.println(xPortGetCoreID());
   #endif
-  states.touchState = LOW;                      // remember the current state
+  touchAction = true;                                                               // indicates that any kind of action has taken place (for auto sleep timer)
+  states.touchState = LOW;                                                          // remember the current state
   controlLed(NONE);   
   String low_msg;
   #ifdef DEBUG
     Serial.println("doSensorLow() Sending LOW message");
   #endif
-  low_msg = String(CLIENT_TOUCH_LOW_MSG) + "_" + String(states.transmissionError); // put the current touch error state into the UDP message
-  if (!sendWifiMessage(low_msg, true)){							// call blocking upd message
+  low_msg = String(CLIENT_TOUCH_LOW_MSG) + "_" + String(states.transmissionError);  // put the current touch error state into the UDP message
+  if (!sendWifiMessage(low_msg, true)){							                                // call blocking upd message
 		states.transmissionError = true;
     #ifdef DEBUG
       Serial.println("doSensorLow() Transmission Error while sending LOW message");
@@ -226,9 +230,9 @@ static inline void checkAliveCounter(void){
       #ifdef DEBUG
         Serial.printf("checkAliveCounter() No server alive Wifi message during %d service intervals.\n", server_alive_cnt);
       #endif
-      server_alive_cnt++;                                        // keep incrementing server alive counter during reconnect tries
-      states.wlanComplete      = false;                          // server is (temporary?) dead the connection must be re-establisched
-      states.aliveCounterError = true;                           // set internal state to indicate error
+      server_alive_cnt++;                                         // keep incrementing server alive counter during reconnect tries
+      states.wlanComplete      = false;                           // server is (temporary?) dead the connection must be re-establisched
+      states.aliveCounterError = true;                            // set internal state to indicate error
     }else{
       // server seems to be dead, client goes to sleep
       #ifdef DEBUG
@@ -236,10 +240,26 @@ static inline void checkAliveCounter(void){
       #endif
       server_alive_cnt         = 0;
       states.wlanComplete      = false;
-      states.aliveCounterError = true;                           // set internal state to indicate error
-      goSleep();                                                 // switch off external power
+      states.aliveCounterError = true;                            // set internal state to indicate error
+      goSleep();                                                  // switch off external power
     } // end if SERVER_ALIVE_CNT_DEAD 
   } // end if SERVER_ALIVE_CNT_MAX
+
+  if (AUTO_SLEEP_TIMER_ENABLE){                                          // check if automatic sleep timer is enabled by config parameter
+    if (touchAction) {                                             // check any action in the meantime
+      autoSleepTimer = AUTO_SLEEP_TIMER_CYCLES;                   // if there were some action in the meantime, reload the auto sleep timer again
+      touchAction = false;
+    }else{
+      autoSleepTimer--;
+      #ifdef DEBUG
+        Serial.printf("checkAliveCounter() Auto sleep timer is enabled, current counter value is %d\n", autoSleepTimer);
+      #endif
+    }
+    if (autoSleepTimer <= 0){                                     // autosleep timer timeout, go to sleep
+      autoSleepTimer = AUTO_SLEEP_TIMER_CYCLES;                   // reload the autosleep timer again, in case sleeping is prevented
+      goSleep();                                                  // go to sleep
+    } //if (autoSleepTimer <= 0)
+  } //if (AUTO_SLEEP_TIMER_ENABLE)
 } // end checkAliveCounter()
 
 
@@ -288,7 +308,7 @@ static inline void checkBatteryVoltage(void){
       #endif
       states.batteryError = true;                                               // indicate low or critical battery by LED
     }else{                                                                      // check if battery voltage is critical
-      //LOW battery voltage
+      // LOW battery voltage
       cycle_msg = String(CLIENT_BAT_LOW_MSG) + "_" + String(average);           // pack message and bat voltage in the UDP frame
       #ifdef DEBUG
         Serial.printf("checkBatteryVoltage() Voltage is low, current value is ");
@@ -297,7 +317,7 @@ static inline void checkBatteryVoltage(void){
       states.batteryError = true;                                               // indicate low or critical battery by LED
     } //end if (average < BAT_CRIT_VOLT)
   }else{ // if (average < BAT_LOW_VOLT)
-    //NORMAL battery voltage
+    // NORMAL battery voltage
     cycle_msg = String(CLIENT_BAT_OK_MSG) + "_" + String(average);              // pack message and bat voltage in the UDP frame
     #ifdef DEBUG
       Serial.printf("checkBatteryVoltage() Bat Voltage is ok, average measured value is %.2fV (low bat is %.2fV and critical bat is %.2fV)\n", average, BAT_LOW_VOLT, BAT_CRIT_VOLT);
@@ -375,7 +395,7 @@ static inline void doService(void){
   checkAliveCounter();                                    // check server alive counter in service
   sendAliveMsg();                                         // send client alive in service
   checkWlanStatus();                                      // check WLAN status and signal strength
-  states.transmissionError = false;                       // delete transmission error during service
+  states.transmissionError = false;                       // delete transmission error during each service
   controlLed(NONE);                                       // set LED immediately
   #ifdef CLIENT_ESP32
     portENTER_CRITICAL_ISR(&timerMux);                    // protect access to serviceRequest 
@@ -622,15 +642,15 @@ void goAlive(void){
 
 void goSleep(){ 
   // go to sleep to save battery 
-  if (!((NO_SLEEP_WHILE_CHARGING) && (digitalRead(CLIENT_CHARGE_IN) == LOW))){   // prevent goint to sleep if battery is charging and the NO_SLEEP_WHILE_CHARGING flag is set
+  if (!((NO_SLEEP_WHILE_CHARGING) && (digitalRead(CLIENT_CHARGE_IN) == LOW))){    // prevent goint to sleep if battery is charging and the NO_SLEEP_WHILE_CHARGING flag is set
     #ifdef DEBUG
       Serial.println("goSleep() Going to sleep");
     #endif
     // LED shutdown
-    states.wlanCompleteBlink = false;                                         // stop blinking when going to sleep
-    controlLed(DOWN);                                                    // decrease LED brightness during shutdown and indicate fading is true
+    states.wlanCompleteBlink = false;                                             // stop blinking when going to sleep
+    controlLed(DOWN);                                                             // decrease LED brightness during shutdown and indicate fading is true
     delay(1000);
-    digitalWrite(CLIENT_SLEEP_OUT, LOW);                                        // switch off external power
+    digitalWrite(CLIENT_SLEEP_OUT, LOW);                                          // switch off external power
   }else{  // if(!((NO_SLEEP_WHILE_CHARGING)
   #ifdef DEBUG
     Serial.println("goSleep() Not going to sleep, because NO_SLEEP_WHILE_CHARGING is set");

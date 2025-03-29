@@ -576,13 +576,17 @@ void loop(){
       Serial.printf("loop(): CNC controller wants to send the client asleep\n");
     #endif
     sendWifiMessage(SERVER_SLEEP_MSG);
-    digitalWrite(SERVER_SLEEP_LED, LOW);                        // indicate sleep request by LED
+    digitalWrite(SERVER_SLEEP_LED, LOW);                                              // indicate sleep request by LED
     //reset some client status infos after sending the client asleep
-    wlan_complete = false;                                      // set Wifi incomplete
-    clientBatteryStatus = CLIENT_BAT_OK;                        // set back battery to ok, to switch off alarm led
+    wlan_complete = false;                                                            // set Wifi incomplete
+    digitalWrite(SERVER_TOUCH_LED, LOW);                                              // indicate current touch state by LED
+    #ifdef SERVER_HW_REVISION_3_0
+      digitalWrite(SERVER_TOUCH_OUT, HIGH != SERVER_TOUCH_OUT_POLARITY);              // indicate touch high to CNC controller 
+    #endif
+    clientBatteryStatus = CLIENT_BAT_OK;                                              // set back battery to ok, to switch off alarm led
     digitalWrite(SERVER_BAT_ALM_LED, HIGH);
     #ifdef SERVER_HW_REVISION_3_0
-      digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY);  // indicated good battery to CNC controller 
+      digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY);           // indicated good battery to CNC controller 
     #endif
   } // end if (digitalRead)
 
