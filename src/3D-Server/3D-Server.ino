@@ -9,6 +9,7 @@
 // * are round trip tick measurement for ESP32 the same as for ESP8266?
 // * store and display multiple battery voltage values for the webserver display (non volatile memory)
 // * are there any mem leaks?
+// * reset client info function bei sleep
 
 // ***************************************************
 // Use Arduino IDE with board package ESP32-WROOM-DA
@@ -377,7 +378,7 @@ void wlanInit(){
     #else
       //do not blink LED if LED ouput is also used as ouput for the cnc controller (PCB revision <3.0) to avoid false detection by CNC Controller
       digitalWrite(SERVER_WLAN_LED, HIGH);                             // switch off WLAN connection LED
-      delay(SLOW_BLINK);                                                // even if output is not blinking, wait a short time to prevent 
+      delay(SLOW_BLINK);                                               // even if output is not blinking, wait a short time to prevent 
     #endif
     yield();
     if (serviceRequest == true)        //do service routine if isr has set the service flag
@@ -579,7 +580,7 @@ void loop(){
     digitalWrite(SERVER_SLEEP_LED, LOW);                                              // indicate sleep request by LED
     //reset some client status infos after sending the client asleep
     wlan_complete = false;                                                            // set Wifi incomplete
-    digitalWrite(SERVER_TOUCH_LED, LOW);                                              // indicate current touch state by LED
+    digitalWrite(SERVER_TOUCH_LED, HIGH);                                             // indicate current touch state by LED
     #ifdef SERVER_HW_REVISION_3_0
       digitalWrite(SERVER_TOUCH_OUT, HIGH != SERVER_TOUCH_OUT_POLARITY);              // indicate touch high to CNC controller 
     #endif
@@ -648,7 +649,7 @@ void loop(){
       temp = strtok (NULL, "_");                                    // battery voltage
       clientBateryVoltage = strtof(temp, &errCheck);                // convert string to float
       #ifdef DEBUG
-        Serial.printf("loop(): Received Client battery is critical (%.2fV)\n\n", clientBateryVoltage);
+        Serial.printf("loop(): Received Client battery is critical (%.2fV)\n", clientBateryVoltage);
       #endif
       return;
     }

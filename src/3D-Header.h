@@ -60,7 +60,7 @@ namespace CncSensor{
   const char*        SERVER_REPLY_MSG            = "reply";               // UDP message from server to client to reply to hello msg
   const char*        SERVER_ALIVE_MSG            = "alive";               // UDP message from server to show server is alive  
   const int          CLIENT_ALIVE_CNT_MAX        = 2;                     // maximum client alive counter value
-  const long         WIFI_RSSI_REPORT_LEVEL      = -85;                   // RSSI level, WLAN signal strength e.g. -40 is better -70 is worse (best was -44)
+  const long         WIFI_RSSI_REPORT_LEVEL      = -85;                   // RSSI level, WLAN signal strength e.g. -40 is better -70 is worse (best was ~-30)
   const int          SERVER_TICKS_ARRAY_SIZE     = 10;                    // Array Size of measured ticks
   const bool         SERVER_SLEEP_IN_POLARITY    = true;                  // Invert SLEEP Input polarity. False means high input send sensor aleep. Truee means low input send sensor aleep (be aware that the input is inverted by a transistor, behaviour will be inverted without an external transistor)
   const bool         SERVER_WLAN_OUT_POLARITY    = true;                  // (works only with server PCB version 3 or later) invert polarity of WLAN output, false means high represents active output, true inverts output and low is active
@@ -82,7 +82,7 @@ namespace CncSensor{
   const char*        CLIENT_RSSI_MSG         = "rssi";                    // UDP message from client with rssi (WLAN signal strength)
   const char*        CLIENT_CYCLE_MSG        = "CYC:";                    // UDP message from client to server to transmit the last measured cycle time ticks
   const char*        CLIENT_INFO_MSG         = "INFO:";                   // UDP message from client to server with infos about the client
-  const int          SERVER_AQUN_CNT_MAX     = 4000;                      // number of loop cycles before the server must acknowledge the high/low messages
+  const int          SERVER_AQUN_CNT_MAX     = 25000;                     // number of loop cycles before the server must acknowledge the high/low messages
   const int          TOUCH_PIN_DEBOUNCE      = 700;                       // debounce time in µs for software touch input pin
   const uint8_t      CLIENT_RGB_BRIGHTNESS   = 20;                        // brightness of the RGB LED (max 255). Product of CLIENT_RGB_BRIGHTNESS x RGB_FADE_SPEED = Fading Time at start and end
   const uint8_t      CLIENT_RGB_FADE_SPEED   = 100;                       // speed for fading out the LED brightness when going to sleep. Set as delay, smaller value faster fading

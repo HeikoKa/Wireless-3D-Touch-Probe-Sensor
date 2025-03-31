@@ -7,6 +7,8 @@
   
   // TODO/Suggestions
   // battery loading could be send to the server to be displayed in the webserver
+  // after wifi establishing send current high low even if it does not changed
+  // es gibt immer dann einen verbingugsfehler, wenn der server im service ist
   
   // *****************************************************************************************************
   // Use Arduino ESP32 PICO-D4 (but it is a ESP32 PICO V3-02 device) do not accidently use server settings
@@ -509,6 +511,11 @@ void wlanInit(void){
     Serial.printf("wlanInit() Sending Wifi message with client infos: %s\n", cycle_msg.c_str());
   #endif
 	sendWifiMessage(cycle_msg.c_str(), false);
+  // after successfull connection, send the current sensor state to the server, even if it has not changed
+  /*if (digitalRead(CLIENT_TOUCH_IN) == (HIGH != CLIENT_TOUCH_POLARITY))  // if current internal state LOW and Pin high
+    doSensorHigh();
+  else
+    doSensorLow();*/
 }//end void WlanInit()
 
 
@@ -663,7 +670,7 @@ void setup(void){
   // general setup function
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                                    // Setup Serial Interface with baud rate
-    Serial.println("setup() I am the 3D Touch Probe Sensor Client");
+    Serial.println("\n\n\nsetup() I am the 3D Touch Probe Sensor Client");
     Serial.println("setup() Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)");
     Serial.printf("setup() My software version is: %s\n", clientSwVersion);
   #endif
