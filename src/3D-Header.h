@@ -85,17 +85,17 @@ namespace CncSensor{
   const int          SERVER_AQUN_CNT_MAX     = 25000;                     // number of loop cycles before the server must acknowledge the high/low messages
   const int          TOUCH_PIN_DEBOUNCE      = 700;                       // debounce time in µs for software touch input pin
   const uint8_t      CLIENT_RGB_BRIGHTNESS   = 20;                        // brightness of the RGB LED (max 255). Product of CLIENT_RGB_BRIGHTNESS x RGB_FADE_SPEED = Fading Time at start and end
-  const uint8_t      CLIENT_RGB_FADE_SPEED   = 100;                       // speed for fading out the LED brightness when going to sleep. Set as delay, smaller value faster fading
-  const bool         CLIENT_ALLOW_LED_FADING = true;                      // allow fading LED at startup and sleep. Leads to longer startup time, but looks nice.
   const bool         CLIENT_TOUCH_POLARITY   = true;                      // invert sensor touch input 
   const uint8_t      TRANSMISSION_RETRY_MAX  = 3;                         // maximum wifi transmission retrys before an transmission error is reported
   //client sleep and awake consts
   const bool         NO_SLEEP_WHILE_CHARGING = false;                     // prevent sleeping during battery loading, e.g. to keep status LED on to see is charging finished. SLEEP_DURING_CHARGING mut not be true at the same time
-  const bool         SLEEP_DURING_CHARGING   = false;                     // fall asleep when charging, helpfull e.g. in case of a charger in the toolchanger magazine. NO_SLEEP_WHILE_CHARGING must not be true at the same time
+  const bool         SLEEP_DURING_CHARGING   = false;                     // fall asleep when charging voltage is applied (need not necessary charging), helpfull e.g. in case of a charger in the toolchanger magazine. NO_SLEEP_WHILE_CHARGING must not be true at the same time
   const bool         AUTO_SLEEP_TIMER_ENABLE = false;                     // enables/disables a timeout counter that sends the client asleep after a certain period of time of no touching (see also SLEEP_NO_TOUCH_CYCLES)
   const int          AUTO_SLEEP_TIMER_CYCLES = 30;                        // timeout service cycles to send the client asleep after no touching event (timeout function must be enabled by SLEEP_NO_TOUCH_TIMEOUT, has also a relationship to parameter SERVICE_INTERVALL)
   const int          SERVER_ALIVE_CNT_MAX    = 2;                         // maximum server alive counter value, try to reconnect
   const int          SERVER_ALIVE_CNT_DEAD   = 3;                         // maximum server alive counter value, server seems to be dead and go to sleep
+  const bool         CLIENT_ALLOW_LED_FADING = true;                      // allow fading LED at startup and sleep. Leads to longer startup time, but looks nice.
+  const uint8_t      CLIENT_RGB_FADE_SPEED   = 100;                       // speed for fading out the LED brightness when going to sleep. Set as delay, smaller value faster fading
   
   //client and server consts
   const uint32_t     SERVICE_INTERVALL       = 4615385;     //~15sec      // ESP8266 timer ticks for service interrupt (ESP8266 max 8388607) 
@@ -174,7 +174,8 @@ namespace CncSensor{
     const uint8_t     CLIENT_TOUCH_IN             = 33;                   // digital input pin to listen
     const uint8_t     CLIENT_SLEEP_OUT            = 4;                    // controls external sleep hardware
     const uint8_t     CLIENT_ANALOG_CHANNEL       = 38;                   // Analog In channel for reading the battery voltage
-    const uint8_t     CLIENT_CHARGE_IN            = 25;                   // Battery Charging Input
+    const uint8_t     CLIENT_CHARGE_VOLTAGE_IN    = 32;                   // Input for battery charging voltage. Battery charging voltage is applied, battery is either charging or not (if already full). Without extra PCB wireing available from PCB version 4.
+    const uint8_t     CLIENT_CHARGE_IN            = 25;                   // Input for battery charging. Battery charging voltage is applied and the battery is currently charging
     const uint8_t     CLIENT_HW_REVISION_0        = 19;                   // (Supported by client PCB version 2.0 and later) The client hardware PCB revision is coded into 3 input bit, this is bit 0
     const uint8_t     CLIENT_HW_REVISION_1        = 22;                   // (Supported by client PCB version 2.0 and later)The client hardware PCB revision is coded into 3 input bit, this is bit 1
     const uint8_t     CLIENT_HW_REVISION_2        = 21;                   // (Supported by client PCB version 2.0 and later)The client hardware PCB revision is coded into 3 input bit, this is bit 2

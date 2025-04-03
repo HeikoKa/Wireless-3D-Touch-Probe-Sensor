@@ -39,6 +39,7 @@ char *serverSwVersion = "3.00";
 
 using namespace CncSensor;
 
+char*         errCheck;
 WiFiUDP       Udp;                                              // UDP object
 int           rssi;                                             // Wifi signal strength
 char          packetBuffer[UDP_PACKET_MAX_SIZE];                // buffer for in/outcoming packets
@@ -459,7 +460,7 @@ void wlanInit(){
 void setup(){
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                     // Setup Serial Interface with baud rate
-    Serial.println("setup(): I am the 3D Touch Probe Sensor Server/Basestation");
+    Serial.println("\n\nsetup(): I am the 3D Touch Probe Sensor Server/Basestation");
     Serial.println("setup(): Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)");
     Serial.printf("setup(): My software version is: %s", serverSwVersion);
     Serial.println();
@@ -517,7 +518,7 @@ void setup(){
     //write default values of digital outputs to CNC controller. From hardware version 3.0 two outputs are utilized, one to control the LED and one to control the output to the CNC controller
     digitalWrite(SERVER_WLAN_OUT,    LOW != SERVER_WLAN_OUT_POLARITY);    // Default value for WLAN output, considering the polarity
     digitalWrite(SERVER_TOUCH_OUT,   LOW != SERVER_TOUCH_OUT_POLARITY);   // Default value for Touch output, considering the polarity
-    digitalWrite(SERVER_ERROR_OUT,   LOW != SERVER_ERROR_OUT_POLARITY);   // Default value for ERROR output, considering the polarity
+    digitalWrite(SERVER_ERROR_OUT,   LOW != SERVER_ERROR_OUT_POLARITY);   // Default value for Error output, considering the polarity
     digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY); // Default value for Battery alarm output, considering the polarity
   #endif
 
@@ -556,7 +557,6 @@ void setup(){
 
 
 void loop(){
-  char* errCheck;
     
   #ifdef WEBSERVER
     server.handleClient();  ////handle client access if webserver is enabled
@@ -600,11 +600,11 @@ void loop(){
 
     //received client sensor HIGH command
     if (!strncmp (packetBuffer, CLIENT_TOUCH_HIGH_MSG, strlen(CLIENT_TOUCH_HIGH_MSG))){
-      digitalWrite(SERVER_TOUCH_LED, LOW);                                              // indicate current touch state by LED
+      digitalWrite(SERVER_TOUCH_LED, LOW);                                        // indicate current touch state by LED
       #ifdef SERVER_HW_REVISION_3_0
-        digitalWrite(SERVER_TOUCH_OUT, HIGH != SERVER_TOUCH_OUT_POLARITY);  // indicate touch high to CNC controller 
+        digitalWrite(SERVER_TOUCH_OUT, HIGH != SERVER_TOUCH_OUT_POLARITY);        // indicate touch high to CNC controller 
       #endif
-      char *highMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_HIGH_MSG);        // cut/decode additional information out of the client message
+      char *highMsgAttach = packetBuffer + strlen(CLIENT_TOUCH_HIGH_MSG);         // cut/decode additional information out of the client message
       if (!strncmp (highMsgAttach, "1", strlen("1")))                             // decode the next 0 or 1 after the message text, this is an info about lost messages
         msg_lost = true;
       #ifdef DEBUG

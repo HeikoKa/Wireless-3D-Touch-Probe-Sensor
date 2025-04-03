@@ -1,20 +1,19 @@
 /**  3D Sensor Client
   *   
   *  @author Heiko Kalte  
-  *  @date 28.03.2025 
+  *  @date 03.04.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
   
   // TODO/Suggestions
   // battery loading could be send to the server to be displayed in the webserver
-  // after wifi establishing send current high low even if it does not changed
-  // es gibt immer dann einen verbingugsfehler, wenn der server im service ist
+  // when bat is close to full charging tends to blink this should be avoided by an array 
   
   // *****************************************************************************************************
   // Use Arduino ESP32 PICO-D4 (but it is a ESP32 PICO V3-02 device) do not accidently use server settings
   // *****************************************************************************************************
   
-char *clientSwVersion = "2.00";
+char *clientSwVersion = "3.00.00";
 #include <WiFiUdp.h>
 #include <Ticker.h>
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
@@ -43,11 +42,13 @@ uint32_t   autoSleepTimer           = AUTO_SLEEP_TIMER_CYCLES;  // init automati
 bool       touchAction              = false;                  // flag that indicates if any touch action (high/low) has taken place, relevant for the auto sleep timer
 uint8_t    arrayIndexBat            = 0;
 uint8_t    arrayIndexRssi           = 0;
+uint8_t    arrayIndexCharging       = 0;
 
 struct statesType{
     bool    touchState               = LOW;                   // current touch sensor state
-    bool    chargingBat              = false;                 // global variable to indicate if battery is charging
-    bool    wlanComplete             = false;                 // global variable to indicate if wlan connection is established completely
+    bool    chargingVoltageApplied   = false;                 // variable to indicate battery charging voltage is applied
+    bool    chargingBat              = false;                 // variable to indicate if battery is charging (charging voltage can be applied, but bat is not charging, because it is full)
+    bool    wlanComplete             = false;                 // variable to indicate if wlan connection is established completely
     bool    wlanCompleteBlink        = true;                  // blink wlan LED if enlighted
     bool    batteryError             = false;                 // error with the battery
     bool    rssiError                = false;                 // error with the WLAN rssi
@@ -55,8 +56,9 @@ struct statesType{
     bool    aliveCounterError        = false;                 // error with server alive counter
 }; 
 
-float batVoltArray[] = {4.0, 4.0, 4.0};
-long rssiArray[]     = {  0,   0,   0};
+float batVoltArray[] = {   4.0,   4.0,   4.0};
+long rssiArray[]     = {     0,     0,     0};
+bool chargeArray[]   = { false, false, false};
 
 statesType states; 
 
@@ -77,7 +79,6 @@ statesType states;
 #endif
 
 Adafruit_NeoPixel pixels(1, CLIENT_RGB_LED_OUT, NEO_GRB + NEO_KHZ800);
-
 
 static inline void checkRssi(void){
   // check WLAN signal stength (average of the last 3 values)
@@ -247,8 +248,8 @@ static inline void checkAliveCounter(void){
     } // end if SERVER_ALIVE_CNT_DEAD 
   } // end if SERVER_ALIVE_CNT_MAX
 
-  if (AUTO_SLEEP_TIMER_ENABLE){                                          // check if automatic sleep timer is enabled by config parameter
-    if (touchAction) {                                             // check any action in the meantime
+  if (AUTO_SLEEP_TIMER_ENABLE){                                   // check if automatic sleep timer is enabled by config parameter
+    if (touchAction) {                                            // check any action in the meantime
       autoSleepTimer = AUTO_SLEEP_TIMER_CYCLES;                   // if there were some action in the meantime, reload the auto sleep timer again
       touchAction = false;
     }else{
@@ -256,13 +257,60 @@ static inline void checkAliveCounter(void){
       #ifdef DEBUG
         Serial.printf("checkAliveCounter() Auto sleep timer is enabled, current counter value is %d\n", autoSleepTimer);
       #endif
-    }
+    } // end if (touchAction)
     if (autoSleepTimer <= 0){                                     // autosleep timer timeout, go to sleep
       autoSleepTimer = AUTO_SLEEP_TIMER_CYCLES;                   // reload the autosleep timer again, in case sleeping is prevented
       goSleep();                                                  // go to sleep
     } //if (autoSleepTimer <= 0)
   } //if (AUTO_SLEEP_TIMER_ENABLE)
 } // end checkAliveCounter()
+
+
+void checkChargingVoltage(void){
+  if(digitalRead(CLIENT_CHARGE_VOLTAGE_IN) == LOW){  //CLIENT_CHARGE_VOLTAGE_IN is applied by an inverting transistor 
+    states.chargingVoltageApplied = true;
+    #ifdef DEBUG
+      Serial.printf("checkChargingVoltage() Battery Charging Voltage is applied\n");
+    #endif
+  }else{
+      states.chargingVoltageApplied = false;
+  }
+    if (SLEEP_DURING_CHARGING && states.chargingVoltageApplied){
+      #ifdef DEBUG
+        Serial.printf("loop() Charging Supply was applied and SLEEP_DURING_CHARGING is enabled. Going to sleep\n");
+      #endif
+      goSleep();
+    } // end if (SLEEP_DURING_CHARGING && states.chargingVoltageApplied)
+} //checkChargingVoltage(void)
+
+
+void checkChargingState(void){
+  arrayIndexCharging++;
+  if (arrayIndexCharging > 2)           // reset array index 
+    arrayIndexCharging = 0;
+  if(digitalRead(CLIENT_CHARGE_IN) == LOW){
+    states.chargingBat = true;
+    chargeArray[arrayIndexCharging] = true;
+    #ifdef DEBUG
+        Serial.printf("checkChargingState() Battery is charging\n");
+    #endif
+  }else{
+    //current charging state input is "not charging"
+    chargeArray[arrayIndexCharging] = false;
+    if (states.chargingVoltageApplied){                             // check if charging stopped because charging voltage is disconnected
+      // check array with the last charging states to prevent charging LED blinking near the end of charging
+      if(!chargeArray[0] && !chargeArray[1] && !chargeArray[2])         // if charging voltage is still applied wait for 3 consecutive charging false values 
+        states.chargingBat = false;
+      else
+        states.chargingBat = true;
+        //############################## hier muss was anders ####################################
+        //################### hierdurch wird aber in loop() direct dreimal in folgenden durchgängen #########################
+    }else{ //if (states.chargingVoltageApplied)
+      states.chargingBat = false;                                     // if charging has stopped because charging voltage is disconnected
+    } //if (states.chargingVoltageApplied)
+  }
+  controlLed(NONE); // set LED immediately
+}
 
 
 static inline void checkBatteryVoltage(void){
@@ -272,19 +320,9 @@ static inline void checkBatteryVoltage(void){
     Serial.println(xPortGetCoreID());
   #endif
   String cycle_msg;
-  //check if battery is charging
-  if(digitalRead(CLIENT_CHARGE_IN) == LOW){
-    states.chargingBat = true;
-    #ifdef DEBUG
-        Serial.printf("checkBatteryVoltage() Battery is charging\n");
-    #endif
-  }else{
-    states.chargingBat = false;                                //battery is not charging
-  }
-  // measure battery voltage
   #ifdef CLIENT_ESP32
     int analogVolts =analogRead(CLIENT_ANALOG_CHANNEL);
-    float batVoltage = 6.6*analogVolts/4096 + BAT_CORRECTION;                          // Battery Voltage is divided by 2 by resistors on PCB
+    float batVoltage = 6.6*analogVolts/4096 + BAT_CORRECTION;                 // Battery Voltage is divided by 2 by resistors on PCB
   #else
     int analogVolts = ESP.getVcc();
     float batVoltage = analogVolts / 1000.0 + BAT_CORRECTION;
@@ -393,6 +431,8 @@ static inline void doService(void){
   #ifdef DEBUG
     Serial.printf("\ndoService() ***** start service *****\n");
   #endif
+  checkChargingVoltage();
+  checkChargingState();
   checkBatteryVoltage();                                  // check battery in service
   checkAliveCounter();                                    // check server alive counter in service
   sendAliveMsg();                                         // send client alive in service
@@ -593,9 +633,10 @@ static inline void initIo(void){
     analogReadResolution(12);   //set the resolution to 12 bits (0-4095) for ESP32 only
   #endif
   pixels.begin();                                                 // initialize NeoPixel RBG LED
-  pinMode(CLIENT_SLEEP_OUT,    OUTPUT);                           // control external sleep/power hardware
-  pinMode(CLIENT_TOUCH_IN,     INPUT_PULLUP);                     // set DIO to input with pullup
-  pinMode(CLIENT_CHARGE_IN,    INPUT_PULLUP);                     // set DIO to input with pullup
+  pinMode(CLIENT_SLEEP_OUT,         OUTPUT);                      // control external sleep/power hardware
+  pinMode(CLIENT_TOUCH_IN,          INPUT_PULLUP);                // set Touch DIO to input with pullup
+  pinMode(CLIENT_CHARGE_VOLTAGE_IN, INPUT_PULLUP);                // set charge voltage DIO to input with pullup
+  pinMode(CLIENT_CHARGE_IN,         INPUT_PULLUP);                // set charging state DIO to input with pullup
   #ifdef CLIENT_HW_REVISION_2_0
     pinMode(CLIENT_HW_REVISION_0, INPUT);                         // client hardware PCB revision bit 0 (only for PCB revision 2.0 or later)
     pinMode(CLIENT_HW_REVISION_1, INPUT);                         // client hardware PCB revision bit 1 (only for PCB revision 2.0 or later)
@@ -649,7 +690,7 @@ void goAlive(void){
 
 void goSleep(){ 
   // go to sleep to save battery 
-  if (!((NO_SLEEP_WHILE_CHARGING) && (digitalRead(CLIENT_CHARGE_IN) == LOW))){    // prevent goint to sleep if battery is charging and the NO_SLEEP_WHILE_CHARGING flag is set
+  if (!(NO_SLEEP_WHILE_CHARGING && states.chargingBat)){    // prevent goint to sleep if battery is charging and the NO_SLEEP_WHILE_CHARGING flag is set
     #ifdef DEBUG
       Serial.println("goSleep() Going to sleep");
     #endif
@@ -700,21 +741,6 @@ void loop(void){
     wlanInit();
   }
 
-  // for more responsiveness check for battery charging status changes within loop()
-  if (states.chargingBat != (digitalRead(CLIENT_CHARGE_IN) == LOW)){
-    #ifdef DEBUG
-      Serial.printf("loop() charging state changed from %d to %d, calling checkBatteryVoltage()\n", states.chargingBat, digitalRead(CLIENT_CHARGE_IN)==LOW);
-    #endif
-    if (SLEEP_DURING_CHARGING && (digitalRead(CLIENT_CHARGE_IN)==LOW)){
-      #ifdef DEBUG
-        Serial.printf("loop() Charging started and SLEEP_DURING_CHARGING is enabled. Going to sleep\n");
-      #endif
-      goSleep();
-    }
-    checkBatteryVoltage();
-    controlLed(NONE); // set LED immediately
-  }
-   
   // do pin polling instead of interrupt, check for state changes high->low or low->high
   if ((digitalRead(CLIENT_TOUCH_IN) == (HIGH != CLIENT_TOUCH_POLARITY)) && (states.touchState == LOW)){  // if current internal state LOW and Pin high
     doSensorHigh();
@@ -725,6 +751,16 @@ void loop(void){
     doSensorLow();
     //delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   }
+
+  // for more responsiveness check for battery CHARGING status changes within loop() not only during service function
+  if (states.chargingBat != (digitalRead(CLIENT_CHARGE_IN) == LOW)){
+    checkChargingState();
+  }
+
+  // for more responsiveness check for battery CHARGING VOLTAGE status changes within loop() not only during service function
+  if (states.chargingVoltageApplied != (digitalRead(CLIENT_CHARGE_VOLTAGE_IN) == LOW)){
+    checkChargingVoltage();
+  } // if(states.chargingVoltageApplied
 
   // check for UDP commands from server
   int packetSize = Udp.parsePacket();
