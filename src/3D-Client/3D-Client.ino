@@ -1,19 +1,18 @@
 /**  3D Sensor Client
   *   
   *  @author Heiko Kalte  
-  *  @date 03.04.2025 
+  *  @date 05 .04.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
   
   // TODO/Suggestions
-  // battery loading could be send to the server to be displayed in the webserver
-  // when bat is close to full charging tends to blink this should be avoided by an array 
+  // check software major version against hardware version
   
   // *****************************************************************************************************
   // Use Arduino ESP32 PICO-D4 (but it is a ESP32 PICO V3-02 device) do not accidently use server settings
   // *****************************************************************************************************
   
-char *clientSwVersion = "3.00.00";
+char *clientSwVersion = "3.00.01";
 #include <WiFiUdp.h>
 #include <Ticker.h>
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
@@ -86,7 +85,7 @@ static inline void checkRssi(void){
   arrayIndexRssi++;
   if (arrayIndexRssi > 2)
     arrayIndexRssi = 0;
-  #ifdef DEBUG
+  #if defined(DEBUG) && defined(VERBOSE)
     Serial.printf("checkRssi() Last three RSSI values were: %d, %d and %d\n", rssiArray[0], rssiArray[1], rssiArray[2]);
   #endif
 
@@ -273,7 +272,10 @@ void checkChargingVoltage(void){
       Serial.printf("checkChargingVoltage() Battery Charging Voltage is applied\n");
     #endif
   }else{
-      states.chargingVoltageApplied = false;
+    states.chargingVoltageApplied = false;
+    #ifdef DEBUG
+      Serial.printf("checkChargingVoltage() No Battery Charging Voltage\n");
+    #endif
   }
     if (SLEEP_DURING_CHARGING && states.chargingVoltageApplied){
       #ifdef DEBUG
@@ -290,24 +292,21 @@ void checkChargingState(void){
     arrayIndexCharging = 0;
   if(digitalRead(CLIENT_CHARGE_IN) == LOW){
     states.chargingBat = true;
-    chargeArray[arrayIndexCharging] = true;
+    chargeArray[arrayIndexCharging] = true;   // save state charging in the array
     #ifdef DEBUG
         Serial.printf("checkChargingState() Battery is charging\n");
     #endif
-  }else{
-    //current charging state input is "not charging"
-    chargeArray[arrayIndexCharging] = false;
+  }else{ //current charging state input is "not charging"
+    chargeArray[arrayIndexCharging] = false;                        // save state not-charging in the array
     if (states.chargingVoltageApplied){                             // check if charging stopped because charging voltage is disconnected
       // check array with the last charging states to prevent charging LED blinking near the end of charging
       if(!chargeArray[0] && !chargeArray[1] && !chargeArray[2])         // if charging voltage is still applied wait for 3 consecutive charging false values 
         states.chargingBat = false;
       else
-        states.chargingBat = true;
-        //############################## hier muss was anders ####################################
-        //################### hierdurch wird aber in loop() direct dreimal in folgenden durchgängen #########################
-    }else{ //if (states.chargingVoltageApplied)
+        states.chargingBat = true;                                      // if not all 3 charging array inputs are "not charging" set chrging status to "charging"
+    }else{ // charging Voltage is not applied 
       states.chargingBat = false;                                     // if charging has stopped because charging voltage is disconnected
-    } //if (states.chargingVoltageApplied)
+    } //end if(states.chargingVoltageApplied)
   }
   controlLed(NONE); // set LED immediately
 }
@@ -335,7 +334,7 @@ static inline void checkBatteryVoltage(void){
   for(int i=0; i<3; i++)
     sum = sum + batVoltArray[i];
   float average = sum/3;
-  #ifdef DEBUG
+  #if defined(DEBUG) && defined(VERBOSE)
     Serial.printf("checkBatteryVoltage() Last three battery voltage values were: %.2f, %.2f and %.2f.\n", batVoltArray[0], batVoltArray[1], batVoltArray[2]);
   #endif
   if (average < BAT_LOW_VOLT){ 
@@ -437,7 +436,12 @@ static inline void doService(void){
   checkAliveCounter();                                    // check server alive counter in service
   sendAliveMsg();                                         // send client alive in service
   checkWlanStatus();                                      // check WLAN status and signal strength
-  states.transmissionError = false;                       // delete transmission error during each service
+  if (states.transmissionError == true){
+    states.transmissionError = false;                       // delete transmission error during each service
+    #ifdef DEBUG
+      Serial.printf("\ndoService() deleting transmission error flag\n");
+    #endif
+  }
   controlLed(NONE);                                       // set LED immediately
   #ifdef CLIENT_ESP32
     portENTER_CRITICAL_ISR(&timerMux);                    // protect access to serviceRequest 
@@ -513,7 +517,7 @@ void wlanInit(void){
         int len = Udp.read(packetBuffer, UDP_PACKET_MAX_SIZE);
         if (len > 0)
           packetBuffer[len] = '\0';
-        if(!strcmp(packetBuffer, SERVER_HELLO_MSG)){
+        if (!strncmp (packetBuffer, SERVER_HELLO_MSG, strlen(SERVER_HELLO_MSG))){
           #ifdef DEBUG
             Serial.println("WlanInit() Detected server hello message, send a reply");
           #endif
@@ -752,15 +756,16 @@ void loop(void){
     //delayMicroseconds(TOUCH_PIN_DEBOUNCE);                  // pauses for debouncing the touch input pin
   }
 
-  // for more responsiveness check for battery CHARGING status changes within loop() not only during service function
-  if (states.chargingBat != (digitalRead(CLIENT_CHARGE_IN) == LOW)){
+  // for more responsiveness check for battery CHARGING STATUS changes within loop() not only during service function
+  if ((states.chargingBat == false) && (digitalRead(CLIENT_CHARGE_IN) == LOW)){ // if charging has just begun
     checkChargingState();
   }
 
   // for more responsiveness check for battery CHARGING VOLTAGE status changes within loop() not only during service function
   if (states.chargingVoltageApplied != (digitalRead(CLIENT_CHARGE_VOLTAGE_IN) == LOW)){
     checkChargingVoltage();
-  } // if(states.chargingVoltageApplied
+    checkChargingState();
+  }
 
   // check for UDP commands from server
   int packetSize = Udp.parsePacket();
@@ -770,7 +775,7 @@ void loop(void){
       packetBuffer[len] = '\0';
 
     // receiving sleep message from server
-    if (!strcmp(packetBuffer, SERVER_SLEEP_MSG)){
+    if (!strncmp (packetBuffer, SERVER_SLEEP_MSG, strlen(SERVER_SLEEP_MSG))){    // wäre besser, wenn der server auch mal was an die Nachrichten anhängen sollte
       #ifdef DEBUG
         Serial.println("loop() Detected sleep command\n");
       #endif
@@ -779,7 +784,7 @@ void loop(void){
     }
 
     // receiving alive message from server and resetting the alive counter
-    if(!strcmp(packetBuffer, SERVER_ALIVE_MSG)){
+    if (!strncmp (packetBuffer, SERVER_ALIVE_MSG, strlen(SERVER_ALIVE_MSG))){
       #ifdef DEBUG
         Serial.println("loop() Detected server alive command");
       #endif
@@ -788,7 +793,7 @@ void loop(void){
     }
 
     // receiving hello message from server and sending reply
-    if(!strcmp(packetBuffer, SERVER_HELLO_MSG)){
+    if (!strncmp (packetBuffer, SERVER_HELLO_MSG, strlen(SERVER_HELLO_MSG))){
       #ifdef DEBUG
         Serial.println("loop() Detected server hello command, send a reply");
       #endif
@@ -797,7 +802,7 @@ void loop(void){
     }
     
     // receiving reply message from server and do nothing
-    if(!strcmp(packetBuffer, SERVER_REPLY_MSG)){
+    if (!strncmp (packetBuffer, SERVER_REPLY_MSG, strlen(SERVER_REPLY_MSG))){
       #ifdef DEBUG
         Serial.println("loop() Detected server reply message.");
       #endif

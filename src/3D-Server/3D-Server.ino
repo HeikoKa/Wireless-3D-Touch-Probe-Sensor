@@ -1,21 +1,21 @@
  /*  3D Sensor Server/Basestation
   *   
   *  @author Heiko Kalte  
-  *  @date 15.03.2025 
+  *  @date 05.04.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
 
 //TODO
 // * are round trip tick measurement for ESP32 the same as for ESP8266?
-// * store and display multiple battery voltage values for the webserver display (non volatile memory)
 // * are there any mem leaks?
 // * reset client info function bei sleep
+// * transmitCounter is not used 
 
 // ***************************************************
 // Use Arduino IDE with board package ESP32-WROOM-DA
 // ***************************************************
   
-char *serverSwVersion = "3.00";
+char *serverSwVersion = "3.00.01";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
 
 #include <stdio.h>
@@ -232,14 +232,15 @@ clientStateType clientStates;
 
     // web side requests that are different from root
     void handleNotFound(){
-        server.send(404, "text/plain", "404: Not found");     // Send HTTP status 404 (Not Found) when there's no handler for the URI in the request
+        server.send(404, "text/plain", "404: Not found");       // Send HTTP status 404 (Not Found) when there's no handler for the URI in the request
     }
 #endif  //#ifdef WEBSERVER
 
 
 static inline void sendWifiMessage(String msg){  
-  transmitCounter++;                                            // increment identifier each time sendWifiMessage() is called
-  Udp.beginPacket(clientIpAddr, clientUdpPort);            // send UDP packet to server to indicate the 3D touch change 
+  transmitCounter++;                                            // increment message identifier each time sendWifiMessage() is called
+  //msg = msg + "_" + String(transmitCounter); 
+  Udp.beginPacket(clientIpAddr, clientUdpPort);                 // send UDP packet to server to indicate the 3D touch change 
   #ifdef CLIENT_ESP32
     Udp.printf(msg.c_str());
   #else //ESP8266
