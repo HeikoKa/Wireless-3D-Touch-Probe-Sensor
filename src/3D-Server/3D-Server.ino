@@ -6,7 +6,7 @@
   */
 
 //TODO
-// * are round trip tick measurement for ESP32 the same as for ESP8266?
+// * are round trip tick measurement for ESP32 correct
 // * are there any mem leaks?
 // * reset client info function bei sleep
 // * transmitCounter is not used 
@@ -15,25 +15,16 @@
 // Use Arduino IDE with board package ESP32-WROOM-DA
 // ***************************************************
   
-char *serverSwVersion = "3.00.01";
+char *serverSwVersion = "3.00.02";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
-
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef SERVER_ESP32
-    #include <WiFi.h>
-  #else //ESP8266
-    #include <ESP8266WiFi.h>
-#endif
+#include <WiFi.h>
 #include <WiFiUdp.h>
 #include <Ticker.h>
 
 #ifdef WEBSERVER
-  #ifdef SERVER_ESP32
-    #include <WebServer.h>
-  #else //ESP8266
-    #include <ESP8266WebServer.h>
-  #endif
+  #include <WebServer.h>
   #include <WiFiClient.h>
 #endif
 
@@ -62,10 +53,8 @@ struct clientStateType{
     }; 
 clientStateType clientStates;
 
-#ifdef SERVER_ESP32
-  hw_timer_t *serviceTimer            = NULL;
-  portMUX_TYPE timerMux               = portMUX_INITIALIZER_UNLOCKED;
-#endif
+hw_timer_t *serviceTimer            = NULL;
+portMUX_TYPE timerMux               = portMUX_INITIALIZER_UNLOCKED;
 
 #ifdef CYCLETIME
   // following code is for measuring the cycle time for UDP messages from server to client to server
@@ -127,11 +116,7 @@ clientStateType clientStates;
 #endif //CYCLETIME
 
 #ifdef WEBSERVER
-    #ifdef SERVER_ESP32
-      WebServer server(80);
-    #else //ESP8266
-      ESP8266WebServer server(80);
-    #endif
+    WebServer server(80);
     // root web page of the server
     void handleRoot() {
         String message = "<h1>Webserver 3D Touch Probe</h1>";
@@ -155,11 +140,7 @@ clientStateType clientStates;
         message += "<p>Number of connected clients: ";
         message += WiFi.softAPgetStationNum();
         message += "</p>";
-        #ifdef SERVER_ESP32
-          message += "<p>Server ESP32: yes</p>";
-        #else
-          message += "<p>Server ESP32: no</p>";
-        #endif
+        message += "<p>Server ESP32: yes</p>";
         #ifdef DEBUG
           message += "<p>Server DEBUG: yes</p>";
         #else
@@ -241,11 +222,7 @@ static inline void sendWifiMessage(String msg){
   transmitCounter++;                                            // increment message identifier each time sendWifiMessage() is called
   //msg = msg + "_" + String(transmitCounter); 
   Udp.beginPacket(clientIpAddr, clientUdpPort);                 // send UDP packet to server to indicate the 3D touch change 
-  #ifdef CLIENT_ESP32
-    Udp.printf(msg.c_str());
-  #else //ESP8266
-    Udp.write(msg.c_str());
-  #endif
+  Udp.printf(msg.c_str());
   Udp.endPacket();
   #if defined(DEBUG) && defined(DEBUG_SHOW_ALL_TRANSMISSIONS)   // show all transmissions content only if DEBUG and DEBUG_SHOW_ALL_TRANSMISSIONS
     Serial.printf("sendWifiMessage() Sending Wifi message: ");
@@ -327,25 +304,17 @@ static inline void doService(){
   #ifdef DEBUG
     Serial.printf("doService(): ***** end service *****\n\n");
   #endif
-  #ifdef SERVER_ESP32
-    portENTER_CRITICAL_ISR(&timerMux);                      // protect acces to "serviceRequest"
-  #endif
+  portENTER_CRITICAL_ISR(&timerMux);                        // protect acces to "serviceRequest"
   serviceRequest = false;                                   // reset service flag
-  #ifdef SERVER_ESP32
-    portEXIT_CRITICAL_ISR(&timerMux);                       // release protection of "serviceRequest"
-  #endif
+  portEXIT_CRITICAL_ISR(&timerMux);                         // release protection of "serviceRequest"
 }
 
 
 //void ICACHE_RAM_ATTR serviceIsr(){                        // timer interrupt for regular service
-void IRAM_ATTR  serviceIsr(){                               // timer interrupt for regular service
-  #ifdef SERVER_ESP32
-    portENTER_CRITICAL_ISR(&timerMux);                      // protect access to serviceRequest 
-  #endif
+void IRAM_ATTR serviceIsr(){                                // timer interrupt for regular service
+  portENTER_CRITICAL_ISR(&timerMux);                        // protect access to serviceRequest 
   serviceRequest = true;                                    // exit isr as quickly as possible and start service routine in main loop
-  #ifdef SERVER_ESP32
-    portEXIT_CRITICAL_ISR(&timerMux);                       // release protection of data
-  #endif
+  portEXIT_CRITICAL_ISR(&timerMux);                         // release protection of data
 }
 
 
@@ -496,17 +465,11 @@ void setup(){
   #endif
 
   //Initialize timer interrup for battery control
-  #ifdef SERVER_ESP32
-    serviceTimer = timerBegin(1000000);                          // Set timer frequency to 1MHz
-    timerAttachInterrupt(serviceTimer, &serviceIsr);             // Attach onTimer function to our timer. 
-    timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);  // Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
-    timerStart(serviceTimer);
-  #else //ESP8266
-    timer1_attachInterrupt(serviceIsr);
-    timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);               // DIV256 means one tick is 3.2us, total intervall time is 3.2us x SERVICE_INTERVALL, max is ~27 sec
-    timer1_write(SERVICE_INTERVALL);                             // Setup serice intervall
-  #endif
-  
+  serviceTimer = timerBegin(1000000);                          // Set timer frequency to 1MHz
+  timerAttachInterrupt(serviceTimer, &serviceIsr);             // Attach onTimer function to our timer. 
+  timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);  // Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
+  timerStart(serviceTimer);
+
   //write default values of digital outputs for LEDs
   digitalWrite(SERVER_POWER_LED,   LOW);                         // switch on power LED
   digitalWrite(SERVER_WLAN_LED,    HIGH);                        // switch off WLAN connection LED

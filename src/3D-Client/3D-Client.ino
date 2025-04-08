@@ -1,7 +1,7 @@
 /**  3D Sensor Client
   *   
   *  @author Heiko Kalte  
-  *  @date 05 .04.2025 
+  *  @date 08.04.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
   
@@ -12,24 +12,14 @@
   // Use Arduino ESP32 PICO-D4 (but it is a ESP32 PICO V3-02 device) do not accidently use server settings
   // *****************************************************************************************************
   
-char *clientSwVersion = "3.00.01";
+char *clientSwVersion = "3.00.02";
 #include <WiFiUdp.h>
 #include <Ticker.h>
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
-
-#ifdef CLIENT_ESP32
-  #include <WiFi.h>
-#else //ESP8266
-  #include <ESP8266WiFi.h>
-#endif
-
+#include <WiFi.h>
 #include <Adafruit_NeoPixel.h>    // for RGB LED
 
 using namespace CncSensor;
-
-#ifndef CLIENT_ESP32
-  ADC_MODE(ADC_VCC);                                          // measure supply Voltage of the board with analog in, only ESP8266
-#endif
 
 WiFiUDP    Udp;
 char       packetBuffer[UDP_PACKET_MAX_SIZE];                 // general buffer to hold UDP messages
@@ -55,16 +45,13 @@ struct statesType{
     bool    aliveCounterError        = false;                 // error with server alive counter
 }; 
 
-float batVoltArray[] = {   4.0,   4.0,   4.0};
-long rssiArray[]     = {     0,     0,     0};
-bool chargeArray[]   = { false, false, false};
+float batVoltArray[] = {   4.0,   4.0,   4.0};                // array of battery voltages to calculate a mean voltage of the last 3 measurements
+long rssiArray[]     = {     0,     0,     0};                // array of wlan rssi signal strength values to calculate a mean value of the last 3 measurements
+bool chargeArray[]   = { false, false, false};                // array of battery charging states to prevent blinking at the end of the charge process
 
 statesType states; 
-
-#ifdef CLIENT_ESP32
-  hw_timer_t *serviceTimer = NULL;
-  portMUX_TYPE timerMux    = portMUX_INITIALIZER_UNLOCKED;
-#endif
+hw_timer_t *serviceTimer = NULL;
+portMUX_TYPE timerMux    = portMUX_INITIALIZER_UNLOCKED;
 
 #ifdef CYCLETIME
   int32_t bTimeLow,  eTimeLow;
@@ -88,14 +75,11 @@ static inline void checkRssi(void){
   #if defined(DEBUG) && defined(VERBOSE)
     Serial.printf("checkRssi() Last three RSSI values were: %d, %d and %d\n", rssiArray[0], rssiArray[1], rssiArray[2]);
   #endif
-
   int sum = 0;
   for(int i=0; i<3; i++){
     sum = sum + rssiArray[i];
   } //end for
-
   long rssi = sum/3; // average of the last three
-
   if (rssi < WIFI_RSSI_REPORT_LEVEL){
     #ifdef DEBUG
       Serial.print("checkRssi() Warning: WLAN signal strength is low, average RSSI:");
@@ -121,11 +105,7 @@ static inline bool sendWifiMessage(String msg, bool blocking){
   #endif
   msg = msg + "_" + String(transmitCounter);                    // add transmitCounter as identifier to each message
   Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());            // send UDP packet to server to indicate the 3D touch change 
-  #ifdef CLIENT_ESP32
-    Udp.printf(msg.c_str());
-  #else //ESP8266
-    Udp.write(msg.c_str());
-  #endif
+  Udp.printf(msg.c_str());
   Udp.endPacket();
   #if defined(DEBUG) && defined(DEBUG_SHOW_ALL_TRANSMISSIONS)   // show all transmissions content only if DEBUG and DEBUG_SHOW_ALL_TRANSMISSIONS
     Serial.printf("sendWifiMessage() Sending Wifi message: ");
@@ -142,9 +122,9 @@ static inline bool sendWifiMessage(String msg, bool blocking){
           int len = Udp.read(packetBuffer, UDP_PACKET_MAX_SIZE);
           if (len > 0)
           packetBuffer[len] = '\0';
-          if(!strcmp(packetBuffer, msg.c_str())){    // check if exactly the same message comes back from server
+          if(!strcmp(packetBuffer, msg.c_str())){     // check if exactly the same message comes back from server
             #ifdef CYCLETIME     
-              eTimeHigh = asm_ccount();      //take end time for client to server to client cycle time measurement
+              eTimeHigh = asm_ccount();               //take end time for client to server to client cycle time measurement
               #ifdef DEBUG
                 Serial.printf("sendWifiMessage() Measured Wifi cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(eTimeHigh - bTimeHigh)));
               #endif
@@ -175,7 +155,7 @@ static inline bool sendWifiMessage(String msg, bool blocking){
     Serial.println(xPortGetCoreID());
   #endif
   touchAction = true;                                   // indicates that any kind of action has taken place (for auto sleep timer)
-  states.touchState = HIGH;                            // remember the current state
+  states.touchState = HIGH;                             // remember the current state
   controlLed(NONE);
   String high_msg;
   #ifdef DEBUG
@@ -243,7 +223,7 @@ static inline void checkAliveCounter(void){
       server_alive_cnt         = 0;
       states.wlanComplete      = false;
       states.aliveCounterError = true;                            // set internal state to indicate error
-      goSleep();                                                  // switch off external power
+      goSleep();
     } // end if SERVER_ALIVE_CNT_DEAD 
   } // end if SERVER_ALIVE_CNT_MAX
 
@@ -254,7 +234,7 @@ static inline void checkAliveCounter(void){
     }else{
       autoSleepTimer--;
       #ifdef DEBUG
-        Serial.printf("checkAliveCounter() Auto sleep timer is enabled, current counter value is %d\n", autoSleepTimer);
+        Serial.printf("checkAliveCounter() Auto sleep timer is enabled, current counter value is %d, max %d\n", autoSleepTimer, AUTO_SLEEP_TIMER_CYCLES);
       #endif
     } // end if (touchAction)
     if (autoSleepTimer <= 0){                                     // autosleep timer timeout, go to sleep
@@ -297,35 +277,28 @@ void checkChargingState(void){
         Serial.printf("checkChargingState() Battery is charging\n");
     #endif
   }else{ //current charging state input is "not charging"
-    chargeArray[arrayIndexCharging] = false;                        // save state not-charging in the array
-    if (states.chargingVoltageApplied){                             // check if charging stopped because charging voltage is disconnected
-      // check array with the last charging states to prevent charging LED blinking near the end of charging
+    chargeArray[arrayIndexCharging] = false;                            // save state not-charging in the array
+    if (states.chargingVoltageApplied){                                 // check if charging stopped because charging voltage is disconnected
       if(!chargeArray[0] && !chargeArray[1] && !chargeArray[2])         // if charging voltage is still applied wait for 3 consecutive charging false values 
         states.chargingBat = false;
       else
         states.chargingBat = true;                                      // if not all 3 charging array inputs are "not charging" set chrging status to "charging"
     }else{ // charging Voltage is not applied 
-      states.chargingBat = false;                                     // if charging has stopped because charging voltage is disconnected
+      states.chargingBat = false;                                       // if charging has stopped because charging voltage is disconnected
     } //end if(states.chargingVoltageApplied)
-  }
-  controlLed(NONE); // set LED immediately
-}
+  } // end if(digitalRead(CLIENT_CHARGE_IN) == LOW){
+  controlLed(NONE);                                                     // set LED immediately
+} // void checkChargingState(void)
 
 
-static inline void checkBatteryVoltage(void){
-  // check the battery voltage
+inline void checkBatteryVoltage(void){
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("checkBatteryVoltage() running on core ");
     Serial.println(xPortGetCoreID());
   #endif
   String cycle_msg;
-  #ifdef CLIENT_ESP32
-    int analogVolts =analogRead(CLIENT_ANALOG_CHANNEL);
-    float batVoltage = 6.6*analogVolts/4096 + BAT_CORRECTION;                 // Battery Voltage is divided by 2 by resistors on PCB
-  #else
-    int analogVolts = ESP.getVcc();
-    float batVoltage = analogVolts / 1000.0 + BAT_CORRECTION;
-  #endif
+  int analogVolts =analogRead(CLIENT_ANALOG_CHANNEL);
+  float batVoltage = 6.6*analogVolts/4096 + BAT_CORRECTION;                 // Battery Voltage is divided by 2 by resistors on PCB
   batVoltArray[arrayIndexBat] = batVoltage;  // store the last 3 voltage values in an array to build an average
   arrayIndexBat++;
   if (arrayIndexBat > 2)
@@ -340,7 +313,7 @@ static inline void checkBatteryVoltage(void){
   if (average < BAT_LOW_VOLT){ 
     if (average < BAT_CRIT_VOLT){
       // CRITICAL battery voltage
-      cycle_msg = String(CLIENT_BAT_CRITICAL_MSG) + "_" + String(average);     // pack message and bat voltage in the UDP frame
+      cycle_msg = String(CLIENT_BAT_CRITICAL_MSG) + "_" + String(average);      // pack message and bat voltage in the UDP frame
       #ifdef DEBUG
         Serial.printf("checkBatteryVoltage() Voltage is critical, current value is ");
         Serial.println(average);
@@ -370,11 +343,7 @@ static inline void checkBatteryVoltage(void){
 String collectClientData(void){
   // collect client data to transmit to server for display in webserver
   String msg = CLIENT_INFO_MSG + String("_");
-  #ifdef CLIENT_ESP32
-   msg += String("ESP32_");
-  #else
-   msg += String("ESP8266_");
-  #endif
+  msg += String("ESP32_");
   #ifdef DEBUG
    msg += String("DEBUG On_");
   #else
@@ -443,13 +412,9 @@ static inline void doService(void){
     #endif
   }
   controlLed(NONE);                                       // set LED immediately
-  #ifdef CLIENT_ESP32
-    portENTER_CRITICAL_ISR(&timerMux);                    // protect access to serviceRequest 
-  #endif
+  portENTER_CRITICAL_ISR(&timerMux);                    // protect access to serviceRequest 
   serviceRequest = false;                                 // reset service flag after service
-  #ifdef CLIENT_ESP32
-    portEXIT_CRITICAL_ISR(&timerMux);                     // release protection of data
-  #endif
+  portEXIT_CRITICAL_ISR(&timerMux);                     // release protection of data
   #ifdef DEBUG
     Serial.printf("doService() ***** end service *****\n\n");
   #endif
@@ -462,13 +427,9 @@ void ICACHE_RAM_ATTR serviceIsr(void){                    // timer interrupt ser
     Serial.print("serviceIsr() running on core ");
     Serial.println(xPortGetCoreID());
   #endif
-  #ifdef CLIENT_ESP32
-    portENTER_CRITICAL_ISR(&timerMux);                    // protect access to serviceRequest 
-  #endif
-    serviceRequest = true;
-  #ifdef CLIENT_ESP32
-    portEXIT_CRITICAL_ISR(&timerMux);                     // release protection of data
-  #endif
+  portENTER_CRITICAL_ISR(&timerMux);                    // protect access to serviceRequest 
+  serviceRequest = true;
+  portEXIT_CRITICAL_ISR(&timerMux);                     // release protection of data
 } // end serviceIsr(void)
 
 
@@ -519,7 +480,7 @@ void wlanInit(void){
           packetBuffer[len] = '\0';
         if (!strncmp (packetBuffer, SERVER_HELLO_MSG, strlen(SERVER_HELLO_MSG))){
           #ifdef DEBUG
-            Serial.println("WlanInit() Detected server hello message, send a reply");
+            Serial.println("wlanInit() Detected server hello message, send a reply");
           #endif
 		      sendWifiMessage(CLIENT_REPLY_MSG, false);
         } // end if(!strcmp(packetBuffer, SERVER_HELLO_MSG))
@@ -556,10 +517,10 @@ void wlanInit(void){
   #endif
 	sendWifiMessage(cycle_msg.c_str(), false);
   // after successfull connection, send the current sensor state to the server, even if it has not changed
-  /*if (digitalRead(CLIENT_TOUCH_IN) == (HIGH != CLIENT_TOUCH_POLARITY))  // if current internal state LOW and Pin high
+  if (digitalRead(CLIENT_TOUCH_IN) == (HIGH != CLIENT_TOUCH_POLARITY))  // if current internal state LOW and Pin high
     doSensorHigh();
   else
-    doSensorLow();*/
+    doSensorLow();
 }//end void WlanInit()
 
 
@@ -631,11 +592,9 @@ void controlLed(fadingType fading){
 } //end controlLed
 
 
-static inline void initIo(void){
+void initIo(void){
   // initialize the MCU IO
-  #ifdef CLIENT_ESP32
-    analogReadResolution(12);   //set the resolution to 12 bits (0-4095) for ESP32 only
-  #endif
+  analogReadResolution(12);   //set the resolution to 12 bits (0-4095) for ESP32 only
   pixels.begin();                                                 // initialize NeoPixel RBG LED
   pinMode(CLIENT_SLEEP_OUT,         OUTPUT);                      // control external sleep/power hardware
   pinMode(CLIENT_TOUCH_IN,          INPUT_PULLUP);                // set Touch DIO to input with pullup
@@ -653,6 +612,7 @@ static inline void initIo(void){
   #endif
   digitalWrite(CLIENT_SLEEP_OUT,  HIGH);                          // switch on output to prevent external sleep hardware to send cpu and board to sleep
 }
+
 
 void showStateColors(void){
   //show all RGB colors
@@ -678,6 +638,7 @@ void showStateColors(void){
   pixels.show();
   delay(SLOW_BLINK);
 }
+
 
 void goAlive(void){
   // do everything that needs to be done when going alive
@@ -722,16 +683,10 @@ void setup(void){
   initIo();
   goAlive();
   //Setup timer interrup for service routines
-  #ifdef CLIENT_ESP32
-    serviceTimer = timerBegin(1000000);                                         // Set timer frequency to 1MHz
-    timerAttachInterrupt(serviceTimer, &serviceIsr);                            // Attach onTimer function to our timer. 
-    timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);                 // Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
-    timerStart(serviceTimer);
-  #else //ESP8266
-    timer1_attachInterrupt(serviceIsr);
-    timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);                              // DIV256 means one tick is 3.2us, total intervall time is 3.2us x SERVICE_INTERVALL, max is ~27 sec
-    timer1_write(SERVICE_INTERVALL);                                            // has to start early, to allow the client to go to sleep, if the server is dead
-  #endif
+  serviceTimer = timerBegin(1000000);                                         // Set timer frequency to 1MHz
+  timerAttachInterrupt(serviceTimer, &serviceIsr);                            // Attach onTimer function to our timer. 
+  timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);                 // Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
+  timerStart(serviceTimer);
   wlanInit();                                                                   // Init wlan communication with server
 } //end setup()
 
