@@ -310,7 +310,6 @@ static inline void doService(){
 }
 
 
-//void ICACHE_RAM_ATTR serviceIsr(){                        // timer interrupt for regular service
 void IRAM_ATTR serviceIsr(){                                // timer interrupt for regular service
   portENTER_CRITICAL_ISR(&timerMux);                        // protect access to serviceRequest 
   serviceRequest = true;                                    // exit isr as quickly as possible and start service routine in main loop

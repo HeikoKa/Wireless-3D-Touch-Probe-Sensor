@@ -25,13 +25,13 @@ WiFiUDP    Udp;
 char       packetBuffer[UDP_PACKET_MAX_SIZE];                 // general buffer to hold UDP messages
 int        server_alive_cnt         = 0;                      // current "server is alive counter" value
 bool       serviceRequest           = false;                  // interrupt service can request a service intervall by this flag
-int        clientHwPcbRevision      = 0;                      // From client PCB version 2 onwards the version can be read out from the PCB coded by 3 hardware inputs
+int        clientHwPcbRevision      = 0;                      // from client PCB version 2 onwards the version can be read out from the PCB coded by 3 hardware inputs
 uint32_t   transmitCounter          = 0;                      // counter for identify each sended Wifi message, is incremented with every UDP message
-uint32_t   autoSleepTimer           = AUTO_SLEEP_TIMER_CYCLES;  // init automatic sleep timer
+uint32_t   autoSleepTimer           = AUTO_SLEEP_TIMER_CYCLES;// init automatic sleep timer
 bool       touchAction              = false;                  // flag that indicates if any touch action (high/low) has taken place, relevant for the auto sleep timer
-uint8_t    arrayIndexBat            = 0;
-uint8_t    arrayIndexRssi           = 0;
-uint8_t    arrayIndexCharging       = 0;
+uint8_t    arrayIndexBat            = 0;                      // global array index for battery voltage
+uint8_t    arrayIndexRssi           = 0;                      // global array index for rssi
+uint8_t    arrayIndexCharging       = 0;                      // global array index for battery charging state
 
 struct statesType{
     bool    touchState               = LOW;                   // current touch sensor state
@@ -45,8 +45,8 @@ struct statesType{
     bool    aliveCounterError        = false;                 // error with server alive counter
 }; 
 
-float batVoltArray[] = {   4.0,   4.0,   4.0};                // array of battery voltages to calculate a mean voltage of the last 3 measurements
-long rssiArray[]     = {     0,     0,     0};                // array of wlan rssi signal strength values to calculate a mean value of the last 3 measurements
+float batVoltArray[] = {   3.7,   3.7,   3.7};                // array of battery voltages to calculate a mean voltage of the last 3 measurements
+long rssiArray[]     = {   -60,   -60,   -60};                // array of wlan rssi signal strength values to calculate a mean value of the last 3 measurements
 bool chargeArray[]   = { false, false, false};                // array of battery charging states to prevent blinking at the end of the charge process
 
 statesType states; 
@@ -64,14 +64,12 @@ portMUX_TYPE timerMux    = portMUX_INITIALIZER_UNLOCKED;
   }
 #endif
 
-Adafruit_NeoPixel pixels(1, CLIENT_RGB_LED_OUT, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pixels(1, CLIENT_RGB_LED_OUT, NEO_GRB + NEO_KHZ800);       // RBG LED
 
 static inline void checkRssi(void){
   // check WLAN signal stength (average of the last 3 values)
-  rssiArray[arrayIndexRssi] = WiFi.RSSI();     //write rssi into array
-  arrayIndexRssi++;
-  if (arrayIndexRssi > 2)
-    arrayIndexRssi = 0;
+  rssiArray[arrayIndexRssi] = WiFi.RSSI();     //write current rssi into array
+  arrayIndexRssi = arrayIndexRssi < 2 ? ++arrayIndexRssi:0;    // increment index and reset to 0 if bigger than 2
   #if defined(DEBUG) && defined(VERBOSE)
     Serial.printf("checkRssi() Last three RSSI values were: %d, %d and %d\n", rssiArray[0], rssiArray[1], rssiArray[2]);
   #endif
@@ -88,7 +86,7 @@ static inline void checkRssi(void){
     states.rssiError = true;
   }else{
     #ifdef DEBUG
-      Serial.print("checkRssi() WLAN signal strength is ok, average 3 measures RSSI:");
+      Serial.print("checkRssi() WLAN signal strength is ok, average RSSI:");
       Serial.println(rssi);
     #endif
     states.rssiError = false;
@@ -267,9 +265,7 @@ void checkChargingVoltage(void){
 
 
 void checkChargingState(void){
-  arrayIndexCharging++;
-  if (arrayIndexCharging > 2)           // reset array index 
-    arrayIndexCharging = 0;
+  arrayIndexCharging = arrayIndexCharging < 2 ? ++arrayIndexCharging:0;    // increment index and reset to 0 if bigger than 2
   if(digitalRead(CLIENT_CHARGE_IN) == LOW){
     states.chargingBat = true;
     chargeArray[arrayIndexCharging] = true;   // save state charging in the array
@@ -300,9 +296,7 @@ inline void checkBatteryVoltage(void){
   int analogVolts =analogRead(CLIENT_ANALOG_CHANNEL);
   float batVoltage = 6.6*analogVolts/4096 + BAT_CORRECTION;                 // Battery Voltage is divided by 2 by resistors on PCB
   batVoltArray[arrayIndexBat] = batVoltage;  // store the last 3 voltage values in an array to build an average
-  arrayIndexBat++;
-  if (arrayIndexBat > 2)
-    arrayIndexBat = 0;
+  arrayIndexBat = arrayIndexBat < 2 ? ++arrayIndexBat:0;    // increment index and reset to 0 if bigger than 2
   float sum = 0;
   for(int i=0; i<3; i++)
     sum = sum + batVoltArray[i];
@@ -421,12 +415,7 @@ static inline void doService(void){
 } // end void doService(void)
 
 
-// ISR attribute for ESP32 "IRAM_ATTR"
-void ICACHE_RAM_ATTR serviceIsr(void){                    // timer interrupt service routine
-  #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
-    Serial.print("serviceIsr() running on core ");
-    Serial.println(xPortGetCoreID());
-  #endif
+void IRAM_ATTR serviceIsr(void){                    // timer interrupt service routine
   portENTER_CRITICAL_ISR(&timerMux);                    // protect access to serviceRequest 
   serviceRequest = true;
   portEXIT_CRITICAL_ISR(&timerMux);                     // release protection of data
@@ -686,7 +675,7 @@ void setup(void){
   serviceTimer = timerBegin(1000000);                                         // Set timer frequency to 1MHz
   timerAttachInterrupt(serviceTimer, &serviceIsr);                            // Attach onTimer function to our timer. 
   timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);                 // Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
-  timerStart(serviceTimer);
+  //timerStart(serviceTimer);
   wlanInit();                                                                   // Init wlan communication with server
 } //end setup()
 

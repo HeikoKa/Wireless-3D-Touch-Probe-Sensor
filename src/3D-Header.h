@@ -16,19 +16,19 @@
 
 //## user defines start ##
 //general defines
-#define DEBUG                   // enable debug output via serial interface on client and server
-//#define VERBOSE                 // enable detailed debug Infos, only relevant with debug
-//#define DEBUG_SHOW_CORE        // Additional debug info on which cpu core the current function is running
+#define DEBUG                           // enable debug output via serial interface on client and server
+//#define VERBOSE                       // enable detailed debug Infos, only relevant with debug
+//#define DEBUG_SHOW_CORE               // additional debug info on which cpu core the current function is running
 //#define DEBUG_SHOW_ALL_TRANSMISSIONS  // show all wifi transmissions during DEBUG
-//#define CYCLETIME              // enable measuring the round trip delay from client to server back to client
+//#define CYCLETIME                     // enable measuring the round trip delay from client to server back to client
 
 // server/basestation specific defines
-#define SERVER_HW_REVISION_3_0  // set this define if basestation/server is hardware revision 3.0 or later
-//#define WEBSERVER               // enable webserver
+#define SERVER_HW_REVISION_3_0          // set this define if basestation/server is hardware revision 3.0 or later
+//#define WEBSERVER                     // enable webserver
 
 // client specific defines
-#define CLIENT_HW_REVISION_2_0  // set this define if client is hardware PCB revision 2.0 or later
-//#define SHOW_STATE_COLORS       // if enabled at the startup of the client all state colors are shown one after the other
+#define CLIENT_HW_REVISION_2_0          // set this define if client is hardware PCB revision 2.0 or later
+//#define SHOW_STATE_COLORS             // if enabled at the startup of the client all state colors are shown one after the other
 //## user defines end ##
 
 #include "IPAddress.h"
