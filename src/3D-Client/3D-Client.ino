@@ -10,6 +10,7 @@
   
   // *****************************************************************************************************
   // Use Arduino ESP32 PICO-D4 (but it is a ESP32 PICO V3-02 device) do not accidently use server settings
+  // Latest Tests under esp32 V3.1.3 (3.2 seems not to work!!!)
   // *****************************************************************************************************
   
 char *clientSwVersion = "3.00.02";

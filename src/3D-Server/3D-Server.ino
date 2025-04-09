@@ -8,12 +8,13 @@
 //TODO
 // * are round trip tick measurement for ESP32 correct
 // * are there any mem leaks?
-// * reset client info function bei sleep
+// * reset client info function after sleep command
 // * transmitCounter is not used 
 
-// ***************************************************
+// **********************************************************
 // Use Arduino IDE with board package ESP32-WROOM-DA
-// ***************************************************
+// Latest Tests under esp32 V3.1.3 (3.2 seems not to work!!!)
+// **********************************************************
   
 char *serverSwVersion = "3.00.02";
 #include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
@@ -220,7 +221,7 @@ portMUX_TYPE timerMux               = portMUX_INITIALIZER_UNLOCKED;
 
 static inline void sendWifiMessage(String msg){  
   transmitCounter++;                                            // increment message identifier each time sendWifiMessage() is called
-  //msg = msg + "_" + String(transmitCounter); 
+  //msg = msg + "_" + String(transmitCounter);                    // add transmit counter to the message for identification
   Udp.beginPacket(clientIpAddr, clientUdpPort);                 // send UDP packet to server to indicate the 3D touch change 
   Udp.printf(msg.c_str());
   Udp.endPacket();
@@ -373,18 +374,17 @@ void wlanInit(){
     sendWifiMessage(SERVER_HELLO_MSG);
     // listen for UDP respond from client
     int packetSize = Udp.parsePacket();
-    if (packetSize){
-      // udp packet received
+    if (packetSize){            // udp packet received
       int len = Udp.read(packetBuffer, UDP_PACKET_MAX_SIZE);
       if (len > 0)
           packetBuffer[len] = '\0';
       #ifdef DEBUG
         Serial.printf("wlanInit(): UDP packet received %d bytes from %s, port %d\n", packetSize, Udp.remoteIP().toString().c_str(), Udp.remotePort());
       #endif
-      // if receive hello from then reply otherwise do nothing
+      // if received "hello" from client then reply otherwise do nothing
       if (!strcmp (packetBuffer, CLIENT_HELLO_MSG)){
         #ifdef DEBUG
-          Serial.printf("wlanInit(): Detected client hello command during wlanInit, send a reply\n\n");
+          Serial.printf("wlanInit(): Detected client -hello- command during wlanInit, send a reply\n\n");
         #endif
         sendWifiMessage(SERVER_REPLY_MSG);      
       }  // if(!strcmp (packetBuffer, CLIENT_HELLO_MSG))
@@ -467,7 +467,7 @@ void setup(){
   serviceTimer = timerBegin(1000000);                          // Set timer frequency to 1MHz
   timerAttachInterrupt(serviceTimer, &serviceIsr);             // Attach onTimer function to our timer. 
   timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);  // Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
-  timerStart(serviceTimer);
+  //timerStart(serviceTimer);
 
   //write default values of digital outputs for LEDs
   digitalWrite(SERVER_POWER_LED,   LOW);                         // switch on power LED
