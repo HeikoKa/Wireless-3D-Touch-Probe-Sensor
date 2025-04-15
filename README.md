@@ -4,7 +4,7 @@ See also announcements under Discussions.
 
 ## Supporters
 
-[<img src="https://github.com/user-attachments/assets/2e52d4b8-d1d0-4040-a53e-2fd4b7a10689" alt="3D_Touch_Probe.jpg" width="400">](https://www.pcbway.com/)
+[<img src="https://github.com/user-attachments/assets/2e52d4b8-d1d0-4040-a53e-2fd4b7a10689" alt="3D_Touch_Probe.jpg" width="300">](https://www.pcbway.com/)
 
 ## Description
 
