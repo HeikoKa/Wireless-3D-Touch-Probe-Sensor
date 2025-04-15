@@ -1,6 +1,11 @@
 # Wireless 3D Touch Probe Edge Finder for CNC/VMC Machines
 
 See also announcements under Discussions. 
+
+## Supporters
+
+[<img src="https://github.com/user-attachments/assets/2e52d4b8-d1d0-4040-a53e-2fd4b7a10689" alt="3D_Touch_Probe.jpg" width="400">](https://www.pcbway.com/)
+
 ## Description
 
 For CNC machines like VMC (Vertical Machining Center) a regular task is to find the center or an edge of a workpiece as a reference for the following machining. However, this can be extremely annoying to do manually by moving the X, Y and Z axis. Professional machinists use so call 3D Touch Probe or Edge Finder to do this automatically. For hobbyists and semi-professionals these Touch Probes are way too expensive. 
