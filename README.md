@@ -37,45 +37,27 @@ The following picture shows the 3D-Touch-Probe in a ATC tool holder BT30. The ro
 |<b>Sensor 4.0</b> (planning) |<ul><li>All Features of revision 3.0 plus</li><li>Dedicated<b> JTAG PORT</b></li></ul>|<img src="https://github.com/user-attachments/assets/e33ef636-db1f-40ec-86c8-3f98f8860e59" alt="3D_Touch_Probe.jpg" width="500"><img src="https://github.com/user-attachments/assets/5632eb0a-e748-4637-9885-9afc0b7008d4" alt="3D_Touch_Probe.jpg" width="500">|
 
 ## Features
-* X, Y and Z detection
-* Client (3D touch probe) and server (base station) code 
-* Wireless communication based on WIFI, especially suitable for automatic toolchanger
-* Many parameters (see header file)
-* Debug mode for detailed serial monitor print outs
-* Optional webserver
-* Optional round trip delay measurement
-* Battery voltage monitoring
-* WLAN signal strength monitoring
-* Client and Server alive monitoring
-* Wake up 3D touch client by touching the sensor by hand or automatically by CNC maschine
-* Send client asleep feature to save battery life
-* Easy recharging of the client battery by magnetic USB cable
+* **X, Y and Z** detection
+* **Wireless communication** based on WIFI, especially suitable for automatic toolchanger
+* specifically designe "**hardware deep sleep**"
+* **Client Wake up** by:
+  - 3D touch action
+  - Automatic wake up by disconnecting charging voltage (charger in tool magazin)
+* **Client Sleep** by:
+  - Sleep by CNC controller interaction
+  - Sleep if Basestation is not available
+  - Sleep by watchdog (not used for a certain time)
+  - Sleep by charging connected (charger in tool magazin)
+  
+* **Battery voltage monitoring**
+* WLAN **signal strength monitoring**
+* Client and Server **alive monitoring** 
+* **Easy UART Debug mode** for detailed serial monitor print outs
+* Optional **webserver**
+* Optional **round trip delay measurement**
+* **Easy recharging** of the client battery/Lipo by on board charging chip 
+* **Many parameters** for highly adaptability and wide range of features (see header file)
 * Many more
-
-## Content of the repository
-* C/C++ code for ESP32 client and server
-* 3D Fusion 360 model of the 3d touch sensor (not yet)
-* Schematic of the electronics of both ESP32 boards (not yet)
-* Eding CNC macro for inner/outer center finding (not yet)
-* Picture of the hardware and picture during build
-* Videos of the function
-* Bill of material (not yet)
-
-## Getting Started
-* get two ESP32 boards and two USB-C cables (not just a power USB cable it must support the serial communication)
-* download and setup Arduine IDE for the ESP32
-* download the repository (client, server und header file)
-* adjust the include file path in the server and client file (because Arduino IDE does not support relative include paths)
-* enable DEBUG mode in the header file for the first runs to get as many infos as possible
-* compile and download files for client and server
-* watch the serial prints of the Client and Server to understand what ist happening
-
-
-## Mechanical Hardware Build
-
-* No lathe required, CNC maschine and welding ist necessary
-* Lathe tools in a vise is required
-
 
 ## Authors
 
