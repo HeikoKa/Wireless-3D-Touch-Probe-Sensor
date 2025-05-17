@@ -123,7 +123,7 @@ namespace CncSensor{
   // Server specific LEDs
   #ifdef SERVER_HW_REVISION_3_0
     // Sensor Basestation hardware version 3.0 distinguishs between outputs for LED and output for CNC controller
-    const uint8_t     SERVER_POWER_LED        = 14;                     // Attention: Power LED, is not used in ESP32 PCB versions
+    const uint8_t     SERVER_POWER_LED        = 2;                      // Attention: Power LED, is not used  before Basestation PCB revision 5.0
     const uint8_t     SERVER_WLAN_LED         = 21;                     // LED to inducate the current WLAN state
     const uint8_t     SERVER_TOUCH_LED        = 32;                     // LED to indicate a Touch of the 3D sensor
     const uint8_t     SERVER_ERROR_LED        = 19;                     // Error output that can e.g tell the cnc controller to stop
@@ -138,7 +138,7 @@ namespace CncSensor{
   #else //SERVER_HW_REVISION_3_0
     //Following Data is valid for the Sensor Basestation PCB hardware version 1.0 and 2.0
     //ESP32 Server specific LEDs  
-    const uint8_t     SERVER_POWER_LED        = 22;                     // Attention: Power LED, is not used in ESP32 PCB versions
+    //const uint8_t     SERVER_POWER_LED        = 22;                     // Attention: Power LED, is not used  before Basestation PCB revision 5.0
     const uint8_t     SERVER_WLAN_LED         = 5;                      // LED to inducate the current WLAN state
     const uint8_t     SERVER_TOUCH_LED        = 17;                     // LED to indicate a touch of the 3D sense
     const uint8_t     SERVER_ERROR_LED        = 23;                     // ERROR output that can hold the cnc controller, e.g.critical battery or no more alive msg from client

@@ -1,28 +1,32 @@
  /*  3D Sensor Server/Basestation
   *   
   *  @author Heiko Kalte  
-  *  @date 05.04.2025 
+  *  @date 16.05.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
 
 //TODO
-// * are round trip tick measurement for ESP32 correct
 // * are there any mem leaks?
 // * reset client info function after sleep command
-// * transmitCounter is not used 
+// * transmitCounter is not used
+// * divide software versio into mayor, minor, maint
+// * compare hardware and software version
 
 // **********************************************************
 // Use Arduino IDE with board package ESP32-WROOM-DA
 // Latest Tests under esp32 V3.1.3 (3.2 seems not to work!!!)
 // **********************************************************
   
-char *serverSwVersion = "3.00.02";
-#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
+char serverSwVersion[] = "3.00.04";
+//#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
+#include "C:\Users\stell\Desktop\src\3D-Header.h"  // Arduino IDE does not support relative paths
 #include <stdio.h>
 #include <stdlib.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <Ticker.h>
+#include "esp_chip_info.h" // see also https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/Esp.cpp
+
 
 #ifdef WEBSERVER
   #include <WebServer.h>
@@ -229,7 +233,7 @@ static inline void sendWifiMessage(String msg){
     Serial.printf("sendWifiMessage() Sending Wifi message: ");
     Serial.println(msg.c_str());
   #endif
-} //sendWifiMessage()
+} //end sendWifiMessage()
 
 
 static inline void sendAliveMsg(){
@@ -237,7 +241,7 @@ static inline void sendAliveMsg(){
   #ifdef DEBUG
     Serial.printf("sendAliveMsg(): Sending server alive message to client IP: %s and Port: %d\n", clientIpAddr.toString().c_str(), clientUdpPort);
   #endif
-} // end sendAliveMsg()
+} //end sendAliveMsg()
 
 
 static inline void checkClientStatus(){
@@ -354,7 +358,7 @@ void wlanInit(){
     yield();
     if (serviceRequest == true)        //do service routine if isr has set the service flag
       doService();
-  } //while(WiFi.softAPgetStationNum() < 1)
+  } //end while(WiFi.softAPgetStationNum() < 1)
 
   #ifdef DEBUG
     Serial.println("Ready");
@@ -387,7 +391,7 @@ void wlanInit(){
           Serial.printf("wlanInit(): Detected client -hello- command during wlanInit, send a reply\n\n");
         #endif
         sendWifiMessage(SERVER_REPLY_MSG);      
-      }  // if(!strcmp (packetBuffer, CLIENT_HELLO_MSG))
+      }  // end if(!strcmp (packetBuffer, CLIENT_HELLO_MSG))
       // at this point a client is connected and UDP messages have been exchanged
       wlan_complete = true;                                     // WLAN connection is complete, stop listening for further incoming UPD packages
       digitalWrite(SERVER_WLAN_LED, LOW);                       // switch on WLAN connection LED to indicate sucessfull connection
@@ -422,19 +426,23 @@ void wlanInit(){
     
     if (serviceRequest == true)        //do service routine if isr has set the service flag
       doService();
-  } //while(!wlan_complete)
-}//void wlanInit()
+  } //end while(!wlan_complete)
+}//end void wlanInit()
 
-
-void setup(){
+void printChipInfo(void){
+  // serial print out details about the ESP chip
+  esp_chip_info_t chip_info;
+  esp_chip_info(&chip_info);
+  
   #ifdef DEBUG
-    Serial.begin(BAUD_RATE);                                     // Setup Serial Interface with baud rate
-    Serial.println("\n\nsetup(): I am the 3D Touch Probe Sensor Server/Basestation");
-    Serial.println("setup(): Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)");
-    Serial.printf("setup(): My software version is: %s", serverSwVersion);
-    Serial.println();
+    Serial.printf("printChipInfo() Chip Model: %d (see esp_chip_info.h for details)\n", chip_info.model);   //#### macht core dump
+    Serial.printf("printChipInfo() Cores: %d\n", chip_info.cores);
+    Serial.printf("printChipInfo() Revision number: %d\n", chip_info.revision);
   #endif
+}
 
+void initIo(void){
+  //initialize the ESP32 IO
   //initialize digital input/output pins
   pinMode(SERVER_POWER_LED,      OUTPUT);                        // LED to show power is on
   pinMode(SERVER_WLAN_LED,       OUTPUT);                        // LED to show WLAN connection state
@@ -443,48 +451,57 @@ void setup(){
   pinMode(SERVER_BAT_ALM_LED,    OUTPUT);                        // Battery Alarm output to indicate to CNC input 
   pinMode(SERVER_SLEEP_LED,      OUTPUT);                        // Send Client to sleep LED
   pinMode(SERVER_SLEEP_IN, INPUT_PULLUP);                        // Send Client to sleep external input
-  
-  #ifdef SERVER_HW_REVISION_3_0
-    pinMode(SERVER_HW_REVISION_0, INPUT);                        // server/basestation hardware PCB revisio bit 0 (only for PCB revision 3.0 or later)
-    pinMode(SERVER_HW_REVISION_1, INPUT);                        // server/basestation hardware PCB revisio bit 1 (only for PCB revision 3.0 or later)
-    pinMode(SERVER_HW_REVISION_2, INPUT);                        // server/basestation hardware PCB revisio bit 2 (only for PCB revision 3.0 or later)
-    serverHwPcbRevision = (digitalRead(SERVER_HW_REVISION_2) << 2) + (digitalRead(SERVER_HW_REVISION_1)<< 1) + digitalRead(SERVER_HW_REVISION_0); //construct version number from 3 input bit
-    #ifdef DEBUG
-      Serial.printf("setup(): My hardware/PCB version is: %d", serverHwPcbRevision);
-      Serial.println();
-    #endif
-  #endif
-
-  #ifdef SERVER_HW_REVISION_3_0
-  //hardware version 3.0 utilizes two outputs one to control the LED and one to control the output to the CNC controller
-    pinMode(SERVER_WLAN_OUT,      OUTPUT);                        // Separt WLAN established Output for CNC controller 
-    pinMode(SERVER_TOUCH_OUT,     OUTPUT);                        // Separt Touch output for CNC controller
-    pinMode(SERVER_ERROR_OUT,     OUTPUT);                        // Separt Error output for CNC controller
-    pinMode(SERVER_BAT_ALM_OUT,   OUTPUT);                        // Separt Battery alarm output for CNC controller
-  #endif
-
-  //Initialize timer interrup for battery control
-  serviceTimer = timerBegin(1000000);                          // Set timer frequency to 1MHz
-  timerAttachInterrupt(serviceTimer, &serviceIsr);             // Attach onTimer function to our timer. 
-  timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);  // Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
-  //timerStart(serviceTimer);
-
   //write default values of digital outputs for LEDs
-  digitalWrite(SERVER_POWER_LED,   LOW);                         // switch on power LED
+  digitalWrite(SERVER_POWER_LED,   LOW);                         // switch on power LED, only from basestation revision
   digitalWrite(SERVER_WLAN_LED,    HIGH);                        // switch off WLAN connection LED
   digitalWrite(SERVER_TOUCH_LED,   HIGH);                        // switch off touch LED
   digitalWrite(SERVER_ERROR_LED,   HIGH);                        // switch off general error LED
   digitalWrite(SERVER_BAT_ALM_LED, HIGH);                        // switch off battery error/low LED
   digitalWrite(SERVER_SLEEP_LED,   HIGH);                        // switch off sleep request LED
-  
+
   #ifdef SERVER_HW_REVISION_3_0
+    //hardware revision inputs
+    pinMode(SERVER_HW_REVISION_0, INPUT);                        // server/basestation hardware PCB revisio bit 0 (only for PCB revision 3.0 or later)
+    pinMode(SERVER_HW_REVISION_1, INPUT);                        // server/basestation hardware PCB revisio bit 1 (only for PCB revision 3.0 or later)
+    pinMode(SERVER_HW_REVISION_2, INPUT);                        // server/basestation hardware PCB revisio bit 2 (only for PCB revision 3.0 or later)
+  //hardware version 3.0 utilizes two outputs one to control the LED and one to control the output to the CNC controller
+    pinMode(SERVER_WLAN_OUT,      OUTPUT);                        // Separt WLAN established Output for CNC controller 
+    pinMode(SERVER_TOUCH_OUT,     OUTPUT);                        // Separt Touch output for CNC controller
+    pinMode(SERVER_ERROR_OUT,     OUTPUT);                        // Separt Error output for CNC controller
+    pinMode(SERVER_BAT_ALM_OUT,   OUTPUT);                        // Separt Battery alarm output for CNC controller
     //write default values of digital outputs to CNC controller. From hardware version 3.0 two outputs are utilized, one to control the LED and one to control the output to the CNC controller
     digitalWrite(SERVER_WLAN_OUT,    LOW != SERVER_WLAN_OUT_POLARITY);    // Default value for WLAN output, considering the polarity
     digitalWrite(SERVER_TOUCH_OUT,   LOW != SERVER_TOUCH_OUT_POLARITY);   // Default value for Touch output, considering the polarity
     digitalWrite(SERVER_ERROR_OUT,   LOW != SERVER_ERROR_OUT_POLARITY);   // Default value for Error output, considering the polarity
     digitalWrite(SERVER_BAT_ALM_OUT, LOW != SERVER_BAT_ALM_OUT_POLARITY); // Default value for Battery alarm output, considering the polarity
   #endif
+}
 
+
+void setup(){
+  #ifdef DEBUG
+    Serial.begin(BAUD_RATE);                                     // Init Serial Interface with baud rate
+  #endif
+  initIo();
+  #ifdef DEBUG
+    Serial.println("\n\nsetup(): I am the 3D Touch Probe Sensor Server/Basestation");
+    Serial.println("setup(): Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)");
+    Serial.printf("setup(): My software version is: %s\n", serverSwVersion);
+    #ifdef SERVER_HW_REVISION_3_0
+      serverHwPcbRevision = (digitalRead(SERVER_HW_REVISION_2) << 2) + (digitalRead(SERVER_HW_REVISION_1)<< 1) + digitalRead(SERVER_HW_REVISION_0); //construct version number from 3 input bit
+      #ifdef DEBUG
+        Serial.printf("setup(): My hardware/PCB version is: %d", serverHwPcbRevision);
+        Serial.println();
+      #endif
+    #endif
+    printChipInfo();
+  #endif
+
+  //Initialize timer interrup for battery control
+  serviceTimer = timerBegin(1000000);                          // Set timer frequency to 1MHz
+  timerAttachInterrupt(serviceTimer, &serviceIsr);             // Attach onTimer function to our timer. 
+  timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);  // Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
+  
   //Setup Soft-AP
   #ifdef DEBUG
       Serial.print("setup(): Setting Soft-AP...");
@@ -516,7 +533,6 @@ void setup(){
     #endif
   } // end if(result == true)
 } //end setup() 
-
 
 
 void loop(){

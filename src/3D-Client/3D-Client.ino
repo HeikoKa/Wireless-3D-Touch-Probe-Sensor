@@ -1,35 +1,35 @@
 /**  3D Sensor Client
   *   
   *  @author Heiko Kalte  
-  *  @date 08.04.2025 
+  *  @date 16.05.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
   
   // TODO/Suggestions
-  // check software major version against hardware version
   
   // *****************************************************************************************************
   // Use Arduino ESP32 PICO-D4 (but it is a ESP32 PICO V3-02 device) do not accidently use server settings
   // Latest Tests under esp32 V3.1.3 (3.2 seems not to work!!!)
   // *****************************************************************************************************
-  
-char *clientSwVersion = "3.00.02";
+
+char clientSwVersion[] = "3.00.04";
 #include <WiFiUdp.h>
 #include <Ticker.h>
-#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
+//#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
+#include "C:\Users\stell\Desktop\src\3D-Header.h"  // Arduino IDE does not support relative paths
 #include <WiFi.h>
 #include <Adafruit_NeoPixel.h>    // for RGB LED
+#include "esp_chip_info.h"        // for detail print outs about ESP chip, see also https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/Esp.cpp
 
 using namespace CncSensor;
 
 WiFiUDP    Udp;
 char       packetBuffer[UDP_PACKET_MAX_SIZE];                 // general buffer to hold UDP messages
-int        server_alive_cnt         = 0;                      // current "server is alive counter" value
+int        serverAliveCnt           = 0;                      // current "server is alive counter" value
 bool       serviceRequest           = false;                  // interrupt service can request a service intervall by this flag
-int        clientHwPcbRevision      = 0;                      // from client PCB version 2 onwards the version can be read out from the PCB coded by 3 hardware inputs
 uint32_t   transmitCounter          = 0;                      // counter for identify each sended Wifi message, is incremented with every UDP message
 uint32_t   autoSleepTimer           = AUTO_SLEEP_TIMER_CYCLES;// init automatic sleep timer
-bool       touchAction              = false;                  // flag that indicates if any touch action (high/low) has taken place, relevant for the auto sleep timer
+bool       touchAction              = false;                  // flag that indicates if any touch action (high/low) has taken place, relevant for the auto sleep timer/watchdog
 uint8_t    arrayIndexBat            = 0;                      // global array index for battery voltage
 uint8_t    arrayIndexRssi           = 0;                      // global array index for rssi
 uint8_t    arrayIndexCharging       = 0;                      // global array index for battery charging state
@@ -44,33 +44,30 @@ struct statesType{
     bool    rssiError                = false;                 // error with the WLAN rssi
     bool    transmissionError        = false;                 // error with the touch state transmission
     bool    aliveCounterError        = false;                 // error with server alive counter
+    uint8_t mayorHwVersion           = 0;                     // mayor hardware PCB version
+    uint8_t mayorSwVersion           = 0;                     // mayor software version
+    uint8_t minorSwVersion           = 0;                     // minor software version
+    uint8_t maintSwVersion           = 0;                     // maintenance software version
 }; 
 
 float batVoltArray[] = {   3.7,   3.7,   3.7};                // array of battery voltages to calculate a mean voltage of the last 3 measurements
-long rssiArray[]     = {   -60,   -60,   -60};                // array of wlan rssi signal strength values to calculate a mean value of the last 3 measurements
-bool chargeArray[]   = { false, false, false};                // array of battery charging states to prevent blinking at the end of the charge process
+long  rssiArray[]    = {   -60,   -60,   -60};                // array of wlan rssi signal strength values to calculate a mean value of the last 3 measurements
+bool  chargeArray[]  = { false, false, false};                // array of battery charging states to prevent blinking at the end of the charge process
 
 statesType states; 
 hw_timer_t *serviceTimer = NULL;
 portMUX_TYPE timerMux    = portMUX_INITIALIZER_UNLOCKED;
 
 #ifdef CYCLETIME
-  int32_t bTimeLow,  eTimeLow;
-  int32_t bTimeHigh, eTimeHigh;
-
-  static inline int32_t asm_ccount(void){              // asm-helpers taken from https://sub.nanona.fi/esp8266/timing-and-ticks.html, reading the CCOUT register with clock ticks
-    int32_t r;
-    asm volatile ("rsr %0, ccount" : "=r"(r));
-    return r;
-  }
+  int32_t beginTime, endTime;
 #endif
 
 Adafruit_NeoPixel pixels(1, CLIENT_RGB_LED_OUT, NEO_GRB + NEO_KHZ800);       // RBG LED
 
 static inline void checkRssi(void){
   // check WLAN signal stength (average of the last 3 values)
-  rssiArray[arrayIndexRssi] = WiFi.RSSI();     //write current rssi into array
-  arrayIndexRssi = arrayIndexRssi < 2 ? ++arrayIndexRssi:0;    // increment index and reset to 0 if bigger than 2
+  rssiArray[arrayIndexRssi] = WiFi.RSSI();                      // write current rssi into array
+  arrayIndexRssi = arrayIndexRssi < 2 ? ++arrayIndexRssi:0;     // increment index and reset to 0 if bigger than 2
   #if defined(DEBUG) && defined(VERBOSE)
     Serial.printf("checkRssi() Last three RSSI values were: %d, %d and %d\n", rssiArray[0], rssiArray[1], rssiArray[2]);
   #endif
@@ -96,11 +93,26 @@ static inline void checkRssi(void){
   sendWifiMessage(cycle_msg, false);
 } //checkRssi()
 
+void printChipInfo(void){
+  // serial print out details about the ESP chip
+  esp_chip_info_t chip_info;
+  esp_chip_info(&chip_info);
+  
+  #ifdef DEBUG
+    Serial.printf("printChipInfo() Chip Model: %d (see esp_chip_info.h for details)\n", chip_info.model);   //#### macht core dump
+    Serial.printf("printChipInfo() Cores: %d\n", chip_info.cores);
+    Serial.printf("printChipInfo() Revision number: %d\n", chip_info.revision);
+  #endif
+}
 
-static inline bool sendWifiMessage(String msg, bool blocking){  
+static inline bool sendWifiMessage(String msg, bool blocking){ 
+  #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
+    Serial.print("sendWifiMessage() running on core ");
+    Serial.println(xPortGetCoreID());
+  #endif 
   transmitCounter++;                                            // increment udp message identifier each time sendWifiMessage() is called
   #ifdef CYCLETIME
-    bTimeHigh = asm_ccount();                                   // take begin time for client to server to client cycle time measurement
+    beginTime = micros();                                       // take begin time for client to server to client cycle time measurement
   #endif
   msg = msg + "_" + String(transmitCounter);                    // add transmitCounter as identifier to each message
   Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());            // send UDP packet to server to indicate the 3D touch change 
@@ -123,11 +135,11 @@ static inline bool sendWifiMessage(String msg, bool blocking){
           packetBuffer[len] = '\0';
           if(!strcmp(packetBuffer, msg.c_str())){     // check if exactly the same message comes back from server
             #ifdef CYCLETIME     
-              eTimeHigh = asm_ccount();               //take end time for client to server to client cycle time measurement
+              endTime = micros();                     // take end time for client to server to client cycle time measurement
               #ifdef DEBUG
-                Serial.printf("sendWifiMessage() Measured Wifi cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(eTimeHigh - bTimeHigh)));
+                Serial.printf("sendWifiMessage() Measured Wifi cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(endTime - beginTime)));
               #endif
-              String cycle_msg = String(CLIENT_CYCLE_MSG) + "_" + String((uint32_t)(eTimeHigh - bTimeHigh)); // pack end-time minus begin-time into a message
+              String cycle_msg = String(CLIENT_CYCLE_MSG) + "_" + String((uint32_t)(endTime - beginTime)); // pack end-time minus begin-time into a message
               sendWifiMessage(cycle_msg.c_str(), false);
             #endif
             #ifdef DEBUG
@@ -199,27 +211,27 @@ static inline void checkAliveCounter(void){
     Serial.print("checkAliveCounter() running on core ");
     Serial.println(xPortGetCoreID());
   #endif
-  if (server_alive_cnt <= SERVER_ALIVE_CNT_MAX){
+  if (serverAliveCnt <= SERVER_ALIVE_CNT_MAX){
     #ifdef DEBUG
-      Serial.printf("checkAliveCounter() Server alive counter current: %d, max reconnect: %d, max server dead: %d\n", server_alive_cnt, SERVER_ALIVE_CNT_MAX, SERVER_ALIVE_CNT_DEAD);
+      Serial.printf("checkAliveCounter() Server alive counter current: %d, max reconnect: %d, max server dead: %d\n", serverAliveCnt, SERVER_ALIVE_CNT_MAX, SERVER_ALIVE_CNT_DEAD);
     #endif
-    server_alive_cnt++;                                          // increase "the server has not answered" alive counter
+    serverAliveCnt++;                                          // increase "the server has not answered" alive counter
     states.aliveCounterError = false;                            // no error, no red LED
   }else{
-    if (server_alive_cnt <= SERVER_ALIVE_CNT_DEAD){
+    if (serverAliveCnt <= SERVER_ALIVE_CNT_DEAD){
       // server alive messages are missing, but try to reconnect
       #ifdef DEBUG
-        Serial.printf("checkAliveCounter() No server alive Wifi message during %d service intervals.\n", server_alive_cnt);
+        Serial.printf("checkAliveCounter() No server alive Wifi message during %d service intervals.\n", serverAliveCnt);
       #endif
-      server_alive_cnt++;                                         // keep incrementing server alive counter during reconnect tries
+      serverAliveCnt++;                                         // keep incrementing server alive counter during reconnect tries
       states.wlanComplete      = false;                           // server is (temporary?) dead the connection must be re-establisched
       states.aliveCounterError = true;                            // set internal state to indicate error
     }else{
       // server seems to be dead, client goes to sleep
       #ifdef DEBUG
-        Serial.printf("checkAliveCounter() No server alive Wifi message during %d service intervals. Going to sleep\n", server_alive_cnt);
+        Serial.printf("checkAliveCounter() No server alive Wifi message during %d service intervals. Going to sleep\n", serverAliveCnt);
       #endif
-      server_alive_cnt         = 0;
+      serverAliveCnt           = 0;
       states.wlanComplete      = false;
       states.aliveCounterError = true;                            // set internal state to indicate error
       goSleep();
@@ -235,16 +247,20 @@ static inline void checkAliveCounter(void){
       #ifdef DEBUG
         Serial.printf("checkAliveCounter() Auto sleep timer is enabled, current counter value is %d, max %d\n", autoSleepTimer, AUTO_SLEEP_TIMER_CYCLES);
       #endif
-    } // end if (touchAction)
+    } // end if(touchAction)
     if (autoSleepTimer <= 0){                                     // autosleep timer timeout, go to sleep
       autoSleepTimer = AUTO_SLEEP_TIMER_CYCLES;                   // reload the autosleep timer again, in case sleeping is prevented
       goSleep();                                                  // go to sleep
-    } //if (autoSleepTimer <= 0)
-  } //if (AUTO_SLEEP_TIMER_ENABLE)
-} // end checkAliveCounter()
+    } //end if(autoSleepTimer <= 0)
+  } //end if(AUTO_SLEEP_TIMER_ENABLE)
+} // end void checkAliveCounter()
 
 
 void checkChargingVoltage(void){
+  #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
+    Serial.print("checkChargingVoltage() running on core ");
+    Serial.println(xPortGetCoreID());
+  #endif
   if(digitalRead(CLIENT_CHARGE_VOLTAGE_IN) == LOW){  //CLIENT_CHARGE_VOLTAGE_IN is applied by an inverting transistor 
     states.chargingVoltageApplied = true;
     #ifdef DEBUG
@@ -266,6 +282,10 @@ void checkChargingVoltage(void){
 
 
 void checkChargingState(void){
+  #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
+    Serial.print("checkChargingState() running on core ");
+    Serial.println(xPortGetCoreID());
+  #endif
   arrayIndexCharging = arrayIndexCharging < 2 ? ++arrayIndexCharging:0;    // increment index and reset to 0 if bigger than 2
   if(digitalRead(CLIENT_CHARGE_IN) == LOW){
     states.chargingBat = true;
@@ -289,19 +309,20 @@ void checkChargingState(void){
 
 
 inline void checkBatteryVoltage(void){
+  // read analog battery voltage and compare to voltage limits
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
     Serial.print("checkBatteryVoltage() running on core ");
     Serial.println(xPortGetCoreID());
   #endif
   String cycle_msg;
-  int analogVolts =analogRead(CLIENT_ANALOG_CHANNEL);
-  float batVoltage = 6.6*analogVolts/4096 + BAT_CORRECTION;                 // Battery Voltage is divided by 2 by resistors on PCB
-  batVoltArray[arrayIndexBat] = batVoltage;  // store the last 3 voltage values in an array to build an average
-  arrayIndexBat = arrayIndexBat < 2 ? ++arrayIndexBat:0;    // increment index and reset to 0 if bigger than 2
+  int analogVolts =analogRead(CLIENT_ANALOG_CHANNEL);                           // read analog battery voltage
+  float batVoltage = 6.6*analogVolts/4096 + BAT_CORRECTION;                     // Battery Voltage is divided by 2 by resistors on PCB
+  batVoltArray[arrayIndexBat] = batVoltage;                                     // store the last 3 voltage values in an array to build an average
+  arrayIndexBat = arrayIndexBat < 2 ? ++arrayIndexBat:0;                        // increment index and reset to 0 if bigger than 2
   float sum = 0;
-  for(int i=0; i<3; i++)
+  for(int i=0; i<3; i++)                                                        // sum up last three battery voltages
     sum = sum + batVoltArray[i];
-  float average = sum/3;
+  float average = sum/3;                                                        // calculate average of the last 2 measurements
   #if defined(DEBUG) && defined(VERBOSE)
     Serial.printf("checkBatteryVoltage() Last three battery voltage values were: %.2f, %.2f and %.2f.\n", batVoltArray[0], batVoltArray[1], batVoltArray[2]);
   #endif
@@ -322,8 +343,8 @@ inline void checkBatteryVoltage(void){
         Serial.println(average);
       #endif
       states.batteryError = true;                                               // indicate low or critical battery by LED
-    } //end if (average < BAT_CRIT_VOLT)
-  }else{ // if (average < BAT_LOW_VOLT)
+    } //end if(average < BAT_CRIT_VOLT)
+  }else{ // else if(average < BAT_LOW_VOLT)
     // NORMAL battery voltage
     cycle_msg = String(CLIENT_BAT_OK_MSG) + "_" + String(average);              // pack message and bat voltage in the UDP frame
     #ifdef DEBUG
@@ -332,7 +353,7 @@ inline void checkBatteryVoltage(void){
     states.batteryError = false;
   } // end if(average < BAT_LOW_VOLT)
   sendWifiMessage(cycle_msg.c_str(), false);
-} // end checkBatteryVoltage(void)
+} // end void checkBatteryVoltage(void)
 
 
 String collectClientData(void){
@@ -351,7 +372,7 @@ String collectClientData(void){
   #endif
   msg += clientSwVersion;
   msg += String("_");
-  msg += clientHwPcbRevision;
+  msg += states.mayorHwVersion;
   return msg;
 } // collectClientData(void)
 
@@ -367,7 +388,7 @@ static inline void checkWlanStatus(void) {
       Serial.printf("checkWlanStatus() WLAN is not connected anymore\n");
     #endif
     states.wlanComplete = false;
-  } //if (states.wlanComplete == true)
+  } //end if
   checkRssi();                       // check WLAN signal strength
 } //end void checkWlanStatus()
 
@@ -394,29 +415,29 @@ static inline void doService(void){
   #ifdef DEBUG
     Serial.printf("\ndoService() ***** start service *****\n");
   #endif
-  checkChargingVoltage();
-  checkChargingState();
-  checkBatteryVoltage();                                  // check battery in service
-  checkAliveCounter();                                    // check server alive counter in service
-  sendAliveMsg();                                         // send client alive in service
+  checkChargingVoltage();                                 // check if charging voltage is applied
+  checkChargingState();                                   // check for battery charging or not charging
+  checkBatteryVoltage();                                  // check battery voltage
+  checkAliveCounter();                                    // check server alive counter
+  sendAliveMsg();                                         // send client alive
   checkWlanStatus();                                      // check WLAN status and signal strength
   if (states.transmissionError == true){
-    states.transmissionError = false;                       // delete transmission error during each service
+    states.transmissionError = false;                     // delete transmission error during each service
     #ifdef DEBUG
       Serial.printf("\ndoService() deleting transmission error flag\n");
     #endif
   }
   controlLed(NONE);                                       // set LED immediately
-  portENTER_CRITICAL_ISR(&timerMux);                    // protect access to serviceRequest 
+  portENTER_CRITICAL_ISR(&timerMux);                      // protect access to serviceRequest 
   serviceRequest = false;                                 // reset service flag after service
-  portEXIT_CRITICAL_ISR(&timerMux);                     // release protection of data
+  portEXIT_CRITICAL_ISR(&timerMux);                       // release protection of data
   #ifdef DEBUG
     Serial.printf("doService() ***** end service *****\n\n");
   #endif
 } // end void doService(void)
 
 
-void IRAM_ATTR serviceIsr(void){                    // timer interrupt service routine
+void IRAM_ATTR serviceIsr(void){                        // timer interrupt service routine
   portENTER_CRITICAL_ISR(&timerMux);                    // protect access to serviceRequest 
   serviceRequest = true;
   portEXIT_CRITICAL_ISR(&timerMux);                     // release protection of data
@@ -429,7 +450,7 @@ void wlanInit(void){
     Serial.print("wlanInit() running on core ");
     Serial.println(xPortGetCoreID());
   #endif
-  WiFi.config(clientIpAddr, gateway, subnet);             // set manual IP address if in Soft Access Point (SAP) mode
+  WiFi.config(clientIpAddr, gateway, subnet);             // set manual IP address
   #ifdef DEBUG
     Serial.printf("\nwlanInit() Connecting to %s ", SSID);
   #endif
@@ -437,8 +458,7 @@ void wlanInit(void){
   WiFi.begin(SSID, password);                             // connect to WLAN 
   while (WiFi.status() != WL_CONNECTED){                  // stay in this loop until a WLAN connection could be established
     controlLed(NONE);                                     // set LED immediately
-    if (!states.wlanCompleteBlink)                        // if blinking is enabled, do not add an additional delay, because delay is added inside controlLed()
-      delay(WLAN_INIT_PAUSE);                             // wait for a moment before checking connection again
+    delay(WLAN_INIT_PAUSE);                             // wait for a moment before checking connection again
     yield();
     #ifdef DEBUG
       Serial.print(".");
@@ -489,12 +509,6 @@ void wlanInit(void){
       #ifdef DEBUG
         Serial.printf("wlanInit() No respond from server yet\n");
       #endif
-      
-      //digitalWrite(CLIENT_WLAN_LED, HIGH);                       // toggle WLAN LED quickly to indicate connection try
-      //delay(FAST_BLINK);
-      //digitalWrite(CLIENT_WLAN_LED, LOW);                        // toggle WLAN LED quickly to indicate connection try
-      //delay(FAST_BLINK);
-      //yield();
       controlLed(NONE); // set LED immediately
     } //end if(packetSize)
     if (serviceRequest == true)                                   //do service routine if isr has set the service flag
@@ -583,10 +597,10 @@ void controlLed(fadingType fading){
 
 
 void initIo(void){
-  // initialize the MCU IO
-  analogReadResolution(12);   //set the resolution to 12 bits (0-4095) for ESP32 only
+  // initialize the ESP32 IO
+  analogReadResolution(12);                                       // set the resolution to 12 bits (0-4095)
   pixels.begin();                                                 // initialize NeoPixel RBG LED
-  pinMode(CLIENT_SLEEP_OUT,         OUTPUT);                      // control external sleep/power hardware
+  pinMode(CLIENT_SLEEP_OUT,         OUTPUT);                      // controls external sleep/power hardware
   pinMode(CLIENT_TOUCH_IN,          INPUT_PULLUP);                // set Touch DIO to input with pullup
   pinMode(CLIENT_CHARGE_VOLTAGE_IN, INPUT_PULLUP);                // set charge voltage DIO to input with pullup
   pinMode(CLIENT_CHARGE_IN,         INPUT_PULLUP);                // set charging state DIO to input with pullup
@@ -594,11 +608,6 @@ void initIo(void){
     pinMode(CLIENT_HW_REVISION_0, INPUT);                         // client hardware PCB revision bit 0 (only for PCB revision 2.0 or later)
     pinMode(CLIENT_HW_REVISION_1, INPUT);                         // client hardware PCB revision bit 1 (only for PCB revision 2.0 or later)
     pinMode(CLIENT_HW_REVISION_2, INPUT);                         // client hardware PCB revision bit 2 (only for PCB revision 2.0 or later)
-    clientHwPcbRevision = (digitalRead(CLIENT_HW_REVISION_2) << 2) + (digitalRead(CLIENT_HW_REVISION_1)<< 1) + digitalRead(CLIENT_HW_REVISION_0); //construct version number from 3 input bit
-    #ifdef DEBUG
-      Serial.printf("setup() My hardware/PCB version is: %d", clientHwPcbRevision);
-      Serial.println();
-    #endif
   #endif
   digitalWrite(CLIENT_SLEEP_OUT,  HIGH);                          // switch on output to prevent external sleep hardware to send cpu and board to sleep
 }
@@ -629,13 +638,38 @@ void showStateColors(void){
   delay(SLOW_BLINK);
 }
 
+void getVersionNumbers(){
+  //takes SW version string and converts it into 3 integers (mayor, minor and maintenance)
+  char mayorSwVersionChar[3];                         // temp variable for mayor software version
+  char minorSwVersionChar[3];                         // temp variable for minor software version
+  char maintSwVersionChar[3];                         // temp variable for maintenance software version
+  char tempVersionString[16];                         // temp version string
+  char *token;
+  
+  strcpy(tempVersionString, clientSwVersion);
+  token = strtok(tempVersionString, ".");             // cut out token from software version e.g. 03.02.01 by delimiter "."
+  strcpy(mayorSwVersionChar, token);                  // copy token to mayor version
+  states.mayorSwVersion = atoi(mayorSwVersionChar);   // convert mayor version to integer
+  token = strtok(NULL, ".");                          // proceed with minor version
+  strcpy(minorSwVersionChar, token);
+  states.minorSwVersion = atoi(minorSwVersionChar);
+  token = strtok(NULL, ".");                          // proceed with maintenance version
+  strcpy(maintSwVersionChar, token);
+  states.maintSwVersion = atoi(maintSwVersionChar);
+  
+  // convert the three hardware input bit to a mayor hardware version number
+  #ifdef CLIENT_HW_REVISION_2_0
+    states.mayorHwVersion = (digitalRead(CLIENT_HW_REVISION_2) << 2) + (digitalRead(CLIENT_HW_REVISION_1)<< 1) + digitalRead(CLIENT_HW_REVISION_0); //construct version number from 3 input bit
+  #endif
+ }
+
 
 void goAlive(void){
   // do everything that needs to be done when going alive
   #ifdef DEBUG
     Serial.println("goAlive() Going alive");
   #endif
-  states.wlanCompleteBlink = false;                             // stop blinking when going to sleep
+  states.wlanCompleteBlink = false;                             // stop blinking when going alive
   controlLed(UP); 
   #ifdef SHOW_STATE_COLORS
     showStateColors();
@@ -650,9 +684,11 @@ void goSleep(){
       Serial.println("goSleep() Going to sleep");
     #endif
     // LED shutdown
+    bool temp = states.wlanCompleteBlink;                                         // save current blinking state
     states.wlanCompleteBlink = false;                                             // stop blinking when going to sleep
     controlLed(DOWN);                                                             // decrease LED brightness during shutdown and indicate fading is true
     delay(1000);
+    states.wlanCompleteBlink = temp;                                              // recover blinking state, does only make sanse if the client does not go to sleep, e.g. by open sensor (instant re-wakeup)
     digitalWrite(CLIENT_SLEEP_OUT, LOW);                                          // switch off external power
   }else{  // if(!((NO_SLEEP_WHILE_CHARGING)
   #ifdef DEBUG
@@ -666,23 +702,32 @@ void setup(void){
   // general setup function
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                                    // Setup Serial Interface with baud rate
+  #endif
+
+  initIo(); // init all IO channels
+  getVersionNumbers();   // fills data structure with software and hardware versio numbers
+  
+  #ifdef DEBUG
     Serial.println("\n\n\nsetup() I am the 3D Touch Probe Sensor Client");
     Serial.println("setup() Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)");
     Serial.printf("setup() My software version is: %s\n", clientSwVersion);
+    Serial.printf("setup() My hardware/PCB version is: %d\n", states.mayorHwVersion);
+    if (states.mayorSwVersion > states.mayorHwVersion)
+      Serial.printf("setup() WARNING: Software mayor version (%d) is higher than hardware mayor version (%d)\n", states.mayorSwVersion, states.mayorHwVersion);
+
+    printChipInfo();
   #endif
-  initIo();
   goAlive();
   //Setup timer interrup for service routines
   serviceTimer = timerBegin(1000000);                                         // Set timer frequency to 1MHz
   timerAttachInterrupt(serviceTimer, &serviceIsr);                            // Attach onTimer function to our timer. 
   timerAlarm(serviceTimer, SERVICE_INTERVALL_ESP32, true, 0);                 // Set alarm to call onTimer function every second (value in microseconds). Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
-  //timerStart(serviceTimer);
   wlanInit();                                                                   // Init wlan communication with server
 } //end setup()
 
 
 void loop(void){  
-  //reconnect to server if connection got lost
+  //re-reconnect to server if connection got lost
   if (states.wlanComplete == false){
     #ifdef DEBUG
       Serial.printf("loop() Lost connection to server, need to re-init wlan connection\n");
@@ -702,12 +747,12 @@ void loop(void){
   }
 
   // for more responsiveness check for battery CHARGING STATUS changes within loop() not only during service function
-  if ((states.chargingBat == false) && (digitalRead(CLIENT_CHARGE_IN) == LOW)){ // if charging has just begun
+  if ((states.chargingBat == false) && (digitalRead(CLIENT_CHARGE_IN) == LOW)){ // if charging has just begun (state is non-charging, but current input says charging)
     checkChargingState();
   }
 
   // for more responsiveness check for battery CHARGING VOLTAGE status changes within loop() not only during service function
-  if (states.chargingVoltageApplied != (digitalRead(CLIENT_CHARGE_VOLTAGE_IN) == LOW)){
+  if (states.chargingVoltageApplied != (digitalRead(CLIENT_CHARGE_VOLTAGE_IN) == LOW)){    // Charging voltage is inverted by transistor. If current charging voltage state is different from the charging voltage state
     checkChargingVoltage();
     checkChargingState();
   }
@@ -733,7 +778,7 @@ void loop(void){
       #ifdef DEBUG
         Serial.println("loop() Detected server alive command");
       #endif
-      server_alive_cnt = 0;                               //reset alive counter for server
+      serverAliveCnt = 0;                               //reset alive counter for server
       return;
     }
 
