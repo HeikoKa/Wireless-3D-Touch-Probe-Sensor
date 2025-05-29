@@ -1,7 +1,7 @@
 /**  Header
   *   
   *  @author Heiko Kalte  
-  *  @date 08.04.2025 
+  *  @date 26.05.2025 
   * 
   *  @version 1.0.2
   */
@@ -17,6 +17,7 @@
 //## user defines start ##
 //general defines
 #define DEBUG                           // enable debug output via serial interface on client and server
+#define DEBUG_SHOW_MEM_CPU_STATS         // show memory and cpu statistics
 //#define VERBOSE                       // enable detailed debug Infos, only relevant with debug
 //#define DEBUG_SHOW_CORE               // additional debug info on which cpu core the current function is running
 //#define DEBUG_SHOW_ALL_TRANSMISSIONS  // show all wifi transmissions during DEBUG
@@ -24,7 +25,7 @@
 
 // server/basestation specific defines
 #define SERVER_HW_REVISION_3_0          // set this define if basestation/server is hardware revision 3.0 or later
-//#define WEBSERVER                     // enable webserver
+#define WEBSERVER                     // enable webserver
 
 // client specific defines
 #define CLIENT_HW_REVISION_2_0          // set this define if client is hardware PCB revision 2.0 or later
@@ -47,6 +48,16 @@ namespace CncSensor{
 
   //datatypes
   enum fadingType  {NONE, UP, DOWN};
+  
+  //Version type def
+  struct versionType{
+    char  * swVersionString          = NULL;                  // Sw version as a string
+    uint8_t mayorHwVersion           = 0;                     // mayor hardware PCB version
+    uint8_t mayorSwVersion           = 0;                     // mayor software version
+    uint8_t minorSwVersion           = 0;                     // minor software version
+    uint8_t maintSwVersion           = 0;                     // maintenance software version
+    bool    versionOk                = false;                 // is hardware mayor version at least the same as software mayor version
+  };
 
   //general consts
   const int          BAUD_RATE                   = 9600;                  // Baud rate for serial outputs/debug

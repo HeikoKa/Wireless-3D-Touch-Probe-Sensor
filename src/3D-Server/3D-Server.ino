@@ -1,25 +1,23 @@
  /*  3D Sensor Server/Basestation
   *   
   *  @author Heiko Kalte  
-  *  @date 16.05.2025 
+  *  @date 29.05.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
 
 //TODO
-// * are there any mem leaks?
 // * reset client info function after sleep command
 // * transmitCounter is not used
-// * divide software versio into mayor, minor, maint
-// * compare hardware and software version
+
 
 // **********************************************************
 // Use Arduino IDE with board package ESP32-WROOM-DA
 // Latest Tests under esp32 V3.1.3 (3.2 seems not to work!!!)
 // **********************************************************
   
-char serverSwVersion[] = "3.00.04";
+char serverSwVersion[10] = "3.00.04";
 //#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
-#include "C:\Users\stell\Desktop\src\3D-Header.h"  // Arduino IDE does not support relative paths
+#include "C:\Users\stell\Desktop\3D-Touch-Sensor\Wireless-3D-Touch-Probe-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
 #include <stdio.h>
 #include <stdlib.h>
 #include <WiFi.h>
@@ -57,6 +55,8 @@ struct clientStateType{
     String    charging    = "";                                 // global variable to indicate if battery is charging (not used at the moment)
     }; 
 clientStateType clientStates;
+
+struct versionType serverVersion;
 
 hw_timer_t *serviceTimer            = NULL;
 portMUX_TYPE timerMux               = portMUX_INITIALIZER_UNLOCKED;
@@ -322,6 +322,43 @@ void IRAM_ATTR serviceIsr(){                                // timer interrupt f
 }
 
 
+void checkVersionNumbers(versionType *version, char swVersion[], uint8_t hwVersionBit2, uint8_t hwVersionBit1, uint8_t hwVersionBit0){
+  //takes SW version string and converts it into 3 integers (mayor, minor and maintenance)
+  //takes hardware version bits and generates a mayor hardware version number
+  //compares hardware and software mayor versions
+  version->swVersionString = swVersion;
+  char mayorSwVersionChar[3];                          // temp variable for mayor software version
+  char minorSwVersionChar[3];                          // temp variable for minor software version
+  char maintSwVersionChar[3];                          // temp variable for maintenance software version
+  char tempVersionString[16];                          // temp version string
+  char *token;
+  
+  strcpy(tempVersionString, version->swVersionString); // do a temp copy of the sw version
+  token = strtok(tempVersionString, ".");              // cut out token from software version e.g. 03.02.01 by delimiter "."
+  strcpy(mayorSwVersionChar, token);                   // copy token to mayor version
+  version->mayorSwVersion = atoi(mayorSwVersionChar);  // convert mayor version to integer
+  token = strtok(NULL, ".");                           // proceed with minor version
+  strcpy(minorSwVersionChar, token);
+  version->minorSwVersion = atoi(minorSwVersionChar);
+  token = strtok(NULL, ".");                           // proceed with maintenance version
+  strcpy(maintSwVersionChar, token);
+  version->maintSwVersion = atoi(maintSwVersionChar);
+  
+  // convert the three hardware input bit to a mayor hardware version number
+  version->mayorHwVersion = (digitalRead(hwVersionBit2) << 2) + (digitalRead(hwVersionBit1)<< 1) + digitalRead(hwVersionBit0); //construct version number from 3 input bit
+  
+  //check mayor version of software and hardware
+  if (version->mayorSwVersion > version->mayorHwVersion){
+    #ifdef DEBUG
+      Serial.printf("checkVersionNumbers() WARNING: Software mayor version (%d) is higher than hardware mayor version (%d)\n", version->mayorSwVersion, version->mayorHwVersion);
+    #endif
+    version->versionOk = false;
+  }else{
+    version->versionOk = true;
+  } //end if(version)
+ } //end checkVersionNumbers()
+
+
 void wlanInit(){
   digitalWrite(SERVER_BAT_ALM_LED, HIGH);                   // reset battery alarm for client if client is no connected yet or not connected anymore
   #ifdef SERVER_HW_REVISION_3_0
@@ -478,24 +515,20 @@ void initIo(void){
 }
 
 
-void setup(){
+void setup(void){
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                     // Init Serial Interface with baud rate
   #endif
   initIo();
+  checkVersionNumbers(&serverVersion, serverSwVersion, SERVER_HW_REVISION_2, SERVER_HW_REVISION_1, SERVER_HW_REVISION_0);
+
   #ifdef DEBUG
     Serial.println("\n\nsetup(): I am the 3D Touch Probe Sensor Server/Basestation");
     Serial.println("setup(): Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)");
-    Serial.printf("setup(): My software version is: %s\n", serverSwVersion);
-    #ifdef SERVER_HW_REVISION_3_0
-      serverHwPcbRevision = (digitalRead(SERVER_HW_REVISION_2) << 2) + (digitalRead(SERVER_HW_REVISION_1)<< 1) + digitalRead(SERVER_HW_REVISION_0); //construct version number from 3 input bit
-      #ifdef DEBUG
-        Serial.printf("setup(): My hardware/PCB version is: %d", serverHwPcbRevision);
-        Serial.println();
-      #endif
-    #endif
-    printChipInfo();
+    Serial.printf("setup(): My software version is:     %s\n", serverVersion.swVersionString);
+    Serial.printf("setup(): My hardware/PCB version is: %d\n", serverVersion.mayorHwVersion);
   #endif
+  printChipInfo();
 
   //Initialize timer interrup for battery control
   serviceTimer = timerBegin(1000000);                          // Set timer frequency to 1MHz

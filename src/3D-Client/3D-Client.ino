@@ -1,12 +1,13 @@
 /**  3D Sensor Client
   *   
   *  @author Heiko Kalte  
-  *  @date 16.05.2025 
+  *  @date 29.05.2025 
   *  Copyright by Heiko Kalte (h.kalte@gmx.de)
   */
   
   // TODO/Suggestions
-  
+  // exit service routine immediately when touch is detected
+
   // *****************************************************************************************************
   // Use Arduino ESP32 PICO-D4 (but it is a ESP32 PICO V3-02 device) do not accidently use server settings
   // Latest Tests under esp32 V3.1.3 (3.2 seems not to work!!!)
@@ -16,10 +17,11 @@ char clientSwVersion[] = "3.00.04";
 #include <WiFiUdp.h>
 #include <Ticker.h>
 //#include "Z:\Projekte\Mill\HeikosMill\3D Taster\Arduino\GIT\3D-Touch-Sensor\src\3D-Header.h"
-#include "C:\Users\stell\Desktop\src\3D-Header.h"  // Arduino IDE does not support relative paths
+#include "C:\Users\stell\Desktop\3D-Touch-Sensor\Wireless-3D-Touch-Probe-Sensor\src\3D-Header.h"  // Arduino IDE does not support relative paths
 #include <WiFi.h>
 #include <Adafruit_NeoPixel.h>    // for RGB LED
 #include "esp_chip_info.h"        // for detail print outs about ESP chip, see also https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/Esp.cpp
+#include "esp_heap_caps.h"        // analyze ESP32 memory
 
 using namespace CncSensor;
 
@@ -34,6 +36,8 @@ uint8_t    arrayIndexBat            = 0;                      // global array in
 uint8_t    arrayIndexRssi           = 0;                      // global array index for rssi
 uint8_t    arrayIndexCharging       = 0;                      // global array index for battery charging state
 
+struct versionType clientVersion;
+
 struct statesType{
     bool    touchState               = LOW;                   // current touch sensor state
     bool    chargingVoltageApplied   = false;                 // variable to indicate battery charging voltage is applied
@@ -44,10 +48,6 @@ struct statesType{
     bool    rssiError                = false;                 // error with the WLAN rssi
     bool    transmissionError        = false;                 // error with the touch state transmission
     bool    aliveCounterError        = false;                 // error with server alive counter
-    uint8_t mayorHwVersion           = 0;                     // mayor hardware PCB version
-    uint8_t mayorSwVersion           = 0;                     // mayor software version
-    uint8_t minorSwVersion           = 0;                     // minor software version
-    uint8_t maintSwVersion           = 0;                     // maintenance software version
 }; 
 
 float batVoltArray[] = {   3.7,   3.7,   3.7};                // array of battery voltages to calculate a mean voltage of the last 3 measurements
@@ -140,7 +140,9 @@ static inline bool sendWifiMessage(String msg, bool blocking){
                 Serial.printf("sendWifiMessage() Measured Wifi cycle time for sensor HIGH activation: %u ticks\n", ((uint32_t)(endTime - beginTime)));
               #endif
               String cycle_msg = String(CLIENT_CYCLE_MSG) + "_" + String((uint32_t)(endTime - beginTime)); // pack end-time minus begin-time into a message
-              sendWifiMessage(cycle_msg.c_str(), false);
+              Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());            // send UDP packet to server to indicate the 3D touch change 
+              Udp.printf(cycle_msg.c_str());
+              Udp.endPacket();
             #endif
             #ifdef DEBUG
               Serial.printf("sendWifiMessage() Detected acknowledge message from server (retries: %d, delay counter: %d, max counter: %d) message is ", retry, counter, SERVER_AQUN_CNT_MAX);
@@ -223,7 +225,7 @@ static inline void checkAliveCounter(void){
       #ifdef DEBUG
         Serial.printf("checkAliveCounter() No server alive Wifi message during %d service intervals.\n", serverAliveCnt);
       #endif
-      serverAliveCnt++;                                         // keep incrementing server alive counter during reconnect tries
+      serverAliveCnt++;                                           // keep incrementing server alive counter during reconnect tries
       states.wlanComplete      = false;                           // server is (temporary?) dead the connection must be re-establisched
       states.aliveCounterError = true;                            // set internal state to indicate error
     }else{
@@ -370,9 +372,9 @@ String collectClientData(void){
   #else
    msg += String("CYCLETIME Off_");
   #endif
-  msg += clientSwVersion;
+  msg += clientVersion.swVersionString;
   msg += String("_");
-  msg += states.mayorHwVersion;
+  msg += clientVersion.mayorHwVersion;
   return msg;
 } // collectClientData(void)
 
@@ -406,6 +408,17 @@ static inline void sendAliveMsg(void){
 } // end void sendAliveMsg(void)
 
 
+void getCpuMemStats(){
+  // size_t freeMem heap_caps_get_free_size();
+  // void heap_caps_dump(uint32_t caps)
+  #if defined(DEBUG) && defined(DEBUG_SHOW_MEM_CPU_STATS)
+    Serial.print("getCpuMemStats() Free heap size: ");
+    Serial.println(heap_caps_get_free_size(MALLOC_CAP_8BIT));
+    //heap_caps_dump(MALLOC_CAP_8BIT);
+  #endif
+}
+
+
 static inline void doService(void){
   // Do all service activities that are called regularly by timer interrupt
   #if defined(DEBUG) && defined(DEBUG_SHOW_CORE)
@@ -415,6 +428,7 @@ static inline void doService(void){
   #ifdef DEBUG
     Serial.printf("\ndoService() ***** start service *****\n");
   #endif
+  getCpuMemStats();
   checkChargingVoltage();                                 // check if charging voltage is applied
   checkChargingState();                                   // check for battery charging or not charging
   checkBatteryVoltage();                                  // check battery voltage
@@ -638,30 +652,41 @@ void showStateColors(void){
   delay(SLOW_BLINK);
 }
 
-void getVersionNumbers(){
+
+ void checkVersionNumbers(versionType *version, char swVersion[], uint8_t hwVersionBit2, uint8_t hwVersionBit1, uint8_t hwVersionBit0){
   //takes SW version string and converts it into 3 integers (mayor, minor and maintenance)
-  char mayorSwVersionChar[3];                         // temp variable for mayor software version
-  char minorSwVersionChar[3];                         // temp variable for minor software version
-  char maintSwVersionChar[3];                         // temp variable for maintenance software version
-  char tempVersionString[16];                         // temp version string
+  //takes hardware version bits and generates a mayor hardware version number
+  //compares hardware and software mayor versions
+  version->swVersionString = swVersion;
+  char mayorSwVersionChar[3];                          // temp variable for mayor software version
+  char minorSwVersionChar[3];                          // temp variable for minor software version
+  char maintSwVersionChar[3];                          // temp variable for maintenance software version
+  char tempVersionString[16];                          // temp version string
   char *token;
   
-  strcpy(tempVersionString, clientSwVersion);
-  token = strtok(tempVersionString, ".");             // cut out token from software version e.g. 03.02.01 by delimiter "."
-  strcpy(mayorSwVersionChar, token);                  // copy token to mayor version
-  states.mayorSwVersion = atoi(mayorSwVersionChar);   // convert mayor version to integer
-  token = strtok(NULL, ".");                          // proceed with minor version
+  strcpy(tempVersionString, version->swVersionString); // do a temp copy of the sw version
+  token = strtok(tempVersionString, ".");              // cut out token from software version e.g. 03.02.01 by delimiter "."
+  strcpy(mayorSwVersionChar, token);                   // copy token to mayor version
+  version->mayorSwVersion = atoi(mayorSwVersionChar);  // convert mayor version to integer
+  token = strtok(NULL, ".");                           // proceed with minor version
   strcpy(minorSwVersionChar, token);
-  states.minorSwVersion = atoi(minorSwVersionChar);
-  token = strtok(NULL, ".");                          // proceed with maintenance version
+  version->minorSwVersion = atoi(minorSwVersionChar);
+  token = strtok(NULL, ".");                           // proceed with maintenance version
   strcpy(maintSwVersionChar, token);
-  states.maintSwVersion = atoi(maintSwVersionChar);
+  version->maintSwVersion = atoi(maintSwVersionChar);
   
   // convert the three hardware input bit to a mayor hardware version number
-  #ifdef CLIENT_HW_REVISION_2_0
-    states.mayorHwVersion = (digitalRead(CLIENT_HW_REVISION_2) << 2) + (digitalRead(CLIENT_HW_REVISION_1)<< 1) + digitalRead(CLIENT_HW_REVISION_0); //construct version number from 3 input bit
-  #endif
- }
+  version->mayorHwVersion = (digitalRead(hwVersionBit2) << 2) + (digitalRead(hwVersionBit1)<< 1) + digitalRead(hwVersionBit0); //construct version number from 3 input bit
+  //check mayor version of software and hardware
+  if (version->mayorSwVersion > version->mayorHwVersion){
+    #ifdef DEBUG
+      Serial.printf("checkVersionNumbers() WARNING: Software mayor version (%d) is higher than hardware mayor version (%d)\n", version->mayorSwVersion, version->mayorHwVersion);
+    #endif
+    version->versionOk = false;
+  }else{
+    version->versionOk = true;
+  } //end if(version)
+ } //end checkVersionNumbers()
 
 
 void goAlive(void){
@@ -703,20 +728,19 @@ void setup(void){
   #ifdef DEBUG
     Serial.begin(BAUD_RATE);                                                    // Setup Serial Interface with baud rate
   #endif
-
   initIo(); // init all IO channels
-  getVersionNumbers();   // fills data structure with software and hardware versio numbers
+  checkVersionNumbers(&clientVersion, clientSwVersion, CLIENT_HW_REVISION_2, CLIENT_HW_REVISION_1, CLIENT_HW_REVISION_0);
   
   #ifdef DEBUG
     Serial.println("\n\n\nsetup() I am the 3D Touch Probe Sensor Client");
     Serial.println("setup() Copyright by Heiko Kalte 2025 (h.kalte@gmx.de)");
-    Serial.printf("setup() My software version is: %s\n", clientSwVersion);
-    Serial.printf("setup() My hardware/PCB version is: %d\n", states.mayorHwVersion);
-    if (states.mayorSwVersion > states.mayorHwVersion)
-      Serial.printf("setup() WARNING: Software mayor version (%d) is higher than hardware mayor version (%d)\n", states.mayorSwVersion, states.mayorHwVersion);
+    Serial.printf("setup() My software version is: %s\n", clientVersion.swVersionString);
+    //Serial.printf("setup() My hardware/PCB version is: %s\n", (clientVersion.mayorHwVersion ==0) ? "n/a" : "test");  //########## setze bei 0 n/a ein.
+    Serial.printf("setup() My hardware/PCB version is: %d\n", clientVersion.mayorHwVersion);
+#endif
+  
 
-    printChipInfo();
-  #endif
+  printChipInfo();
   goAlive();
   //Setup timer interrup for service routines
   serviceTimer = timerBegin(1000000);                                         // Set timer frequency to 1MHz
